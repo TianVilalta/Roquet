@@ -1,95 +1,88 @@
 <!DOCTYPE html>
-<html lang="ca">
-<head>
-  <meta charset="UTF-8" />
-  <title>VR Mans amb càmera</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<html>
+  <head>
+    <meta charset="utf-8">
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  </head>
 
-  <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <body>
+    <a-scene xr-mode-ui="enabled: true">
+      <a-entity camera look-controls></a-entity>
 
-  <!-- MediaPipe Hands -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+      <a-sky color="#222233"></a-sky>
 
-  <style>
-    #video {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      width: 200px;
-      border: 2px solid white;
-      z-index: 999;
-    }
-  </style>
-</head>
+      <!-- Cub que es pot arrossegar -->
+      <a-box id="dragCube"
+             position="0 1.5 -2"
+             depth="0.5" height="0.5" width="0.5"
+             color="orange">
+      </a-box>
 
-<body>
-  <!-- Vídeo visible per comprovar que funciona -->
-  <video id="video" playsinline></video>
+      <!-- Model del mando -->
+      <a-entity id="controller"
+                geometry="primitive: box; width: 0.1; height: 0.05; depth: 0.2"
+                material="color: cyan">
+      </a-entity>
+    </a-scene>
 
-  <!-- Escena VR -->
-  <a-scene vr-mode-ui="enabled: true">
-    <a-entity camera look-controls wasd-controls></a-entity>
+    <script>
+      const scene = document.querySelector('a-scene');
+      const controllerModel = document.getElementById('controller');
+      const cube = document.getElementById('dragCube');
 
-    <a-sky color="#222233"></a-sky>
-    <a-plane rotation="-90 0 0" width="30" height="30" color="#444"></a-plane>
+      let dragging = false;
 
-    <!-- Contenidor de punts de la mà -->
-    <a-entity id="handPoints"></a-entity>
-  </a-scene>
+      scene.renderer.xr.addEventListener('sessionstart', () => {
+        const session = scene.renderer.xr.getSession();
 
-  <script>
-    const video = document.getElementById('video');
-    const handPoints = document.getElementById('handPoints');
+        session.addEventListener('inputsourceschange', () => {
+          for (const input of session.inputSources) {
 
-    // Crear 21 punts 3D per la mà
-    const points = [];
-    for (let i = 0; i < 21; i++) {
-      const p = document.createElement('a-sphere');
-      p.setAttribute('radius', '0.03');
-      p.setAttribute('color', 'yellow');
-      handPoints.appendChild(p);
-      points.push(p);
-    }
+            // Només volem mandos (no mans)
+            if (input.targetRayMode === "tracked-pointer" && input.gamepad) {
 
-    // Configurar MediaPipe Hands
-    const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
+              function update() {
+                const frame = scene.renderer.xr.getFrame();
+                const refSpace = scene.renderer.xr.getReferenceSpace();
+                const pose = frame.getPose(input.targetRaySpace, refSpace);
 
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7
-    });
+                if (pose) {
+                  const p = pose.transform.position;
+                  const r = pose.transform.orientation;
 
-    hands.onResults(results => {
-      if (!results.multiHandLandmarks.length) return;
+                  // Actualitzar model del mando
+                  controllerModel.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
+                  controllerModel.object3D.quaternion.set(r.x, r.y, r.z, r.w);
 
-      const lm = results.multiHandLandmarks[0];
+                  // Distància entre mando i cub
+                  const dx = p.x - cube.object3D.position.x;
+                  const dy = p.y - cube.object3D.position.y;
+                  const dz = p.z - cube.object3D.position.z;
+                  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
-      lm.forEach((pt, i) => {
-        // Convertir coordenades 0..1 a espai 3D
-        const x = (pt.x - 0.5) * -4;
-        const y = (0.5 - pt.y) * 3;
-        const z = -3 + pt.z * 2;
+                  // Trigger del mando
+                  const trigger = input.gamepad.buttons[0].pressed;
 
-        points[i].setAttribute('position', `${x} ${y} ${z}`);
+                  // Si el mando toca el cub i apretes el trigger → agafar
+                  if (dist < 0.4 && trigger) dragging = true;
+
+                  // Si deixes anar el trigger → deixar
+                  if (!trigger) dragging = false;
+
+                  // Si estàs arrossegant → moure el cub amb el mando
+                  if (dragging) {
+                    cube.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
+                  }
+                }
+
+                requestAnimationFrame(update);
+              }
+
+              update();
+            }
+          }
+        });
       });
-    });
-
-    // Activar càmera
-    const camera = new Camera(video, {
-      onFrame: async () => {
-        await hands.send({image: video});
-      },
-      width: 640,
-      height: 480
-    });
-
-    camera.start();
-  </script>
-</body>
+    </script>
+  </body>
 </html>
