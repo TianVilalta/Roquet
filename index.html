@@ -2,7 +2,7 @@
 <html lang="ca">
 <head>
   <meta charset="UTF-8" />
-  <title>VR Controller Debug</title>
+  <title>Touch & Teleport Cube</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -14,54 +14,63 @@
     webxr="optionalFeatures: local-floor, bounded-floor">
 
     <!-- Càmera -->
-    <a-entity id="cam" camera look-controls position="0 1.6 0"></a-entity>
+    <a-entity camera look-controls position="0 1.6 0"></a-entity>
 
     <a-sky color="#222233"></a-sky>
+
+    <!-- Cub que es mou quan el toquen -->
+    <a-box id="cube"
+           position="0 1.5 -2"
+           depth="0.4" height="0.4" width="0.4"
+           color="orange">
+    </a-box>
 
     <!-- Mandos -->
     <a-entity id="rightController" oculus-touch-controls="hand: right"></a-entity>
     <a-entity id="leftController"  oculus-touch-controls="hand: left"></a-entity>
 
-    <!-- Text 3D visible en VR -->
-    <a-entity id="debugText"
-              text="value: Carregant...; color: yellow; width: 3"
-              position="0 1.2 -1.5">
-    </a-entity>
-
   </a-scene>
 
   <script>
-    const debugText = document.getElementById('debugText');
+    const cube = document.getElementById('cube');
     const scene = document.querySelector('a-scene');
+
+    // Funció per posar el cub en una posició nova aleatòria
+    function teleportCube() {
+      const x = (Math.random() - 0.5) * 4;   // entre -2 i 2
+      const y = 1 + Math.random() * 1.5;     // entre 1 i 2.5
+      const z = -1.5 - Math.random() * 3;    // entre -1.5 i -4.5
+      cube.setAttribute('position', `${x} ${y} ${z}`);
+    }
 
     scene.renderer.xr.addEventListener('sessionstart', () => {
       const session = scene.renderer.xr.getSession();
 
       function loop() {
-        let output = "";
+        const cubePos = cube.object3D.position;
 
         for (const input of session.inputSources) {
           if (!input.gamepad) continue;
 
-          output += `Mando: ${input.handedness}\n`;
+          // Pose del mando
+          const frame = scene.renderer.xr.getFrame();
+          const refSpace = scene.renderer.xr.getReferenceSpace();
+          const pose = frame.getPose(input.targetRaySpace, refSpace);
+          if (!pose) continue;
 
-          // Botons
-          input.gamepad.buttons.forEach((btn, i) => {
-            if (btn.pressed) {
-              output += `Botó ${i}: PREMUT\n`;
-            }
-          });
+          const p = pose.transform.position;
 
-          // Joystick
-          if (input.gamepad.axes.length >= 4) {
-            output += `Stick X: ${input.gamepad.axes[2].toFixed(3)}\n`;
-            output += `Stick Y: ${input.gamepad.axes[3].toFixed(3)}\n`;
+          // Distància mando-cub
+          const dx = p.x - cubePos.x;
+          const dy = p.y - cubePos.y;
+          const dz = p.z - cubePos.z;
+          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+          // Si el mando "toca" el cub (radi ~0.3), teleporta
+          if (dist < 0.3) {
+            teleportCube();
           }
-
-          output += "\n";
         }
-
-        debugText.setAttribute("text", "value: " + (output || "No hi ha mandos detectats"));
 
         requestAnimationFrame(loop);
       }
