@@ -140,6 +140,71 @@ function prevColor() {
   cube.material.color.setHex(colors[colorIndex]);
 }
 
+// --- Text (a 180º del cub, darrere de l'usuari quan mira el cub) ---
+let textColorIndex = 0;
+
+function makeTextCanvas(bgHex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  const bgColor = '#' + new THREE.Color(bgHex).getHexString();
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 90px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('TEXT VR', canvas.width / 2, canvas.height / 2);
+  return canvas;
+}
+
+const textCanvas = makeTextCanvas(colors[textColorIndex]);
+const textTexture = new THREE.CanvasTexture(textCanvas);
+const textGeo = new THREE.PlaneGeometry(1.2, 0.6);
+const textMat = new THREE.MeshBasicMaterial({ map: textTexture, side: THREE.DoubleSide });
+const textMesh = new THREE.Mesh(textGeo, textMat);
+
+// El cub està a (0, 1.2, -1). El text es col·loca a 180º, és a dir a (0, 1.2, 1),
+// i es gira 180º (Math.PI) perquè quedi llegible quan l'usuari es giri cap a ell.
+textMesh.position.set(0, 1.2, 1);
+textMesh.rotation.y = Math.PI;
+scene.add(textMesh);
+
+function updateTextTexture() {
+  const newCanvas = makeTextCanvas(colors[textColorIndex]);
+  textTexture.image = newCanvas;
+  textTexture.needsUpdate = true;
+}
+
+function nextTextColor() {
+  textColorIndex = (textColorIndex + 1) % colors.length;
+  updateTextTexture();
+}
+function prevTextColor() {
+  textColorIndex = (textColorIndex - 1 + colors.length) % colors.length;
+  updateTextTexture();
+}
+
+// --- Detecció de quin element té l'usuari al davant (cub o text) ---
+const camForward = new THREE.Vector3();
+const toCube = new THREE.Vector3();
+const toText = new THREE.Vector3();
+const camPos = new THREE.Vector3();
+
+function getFacingTarget() {
+  camera.getWorldDirection(camForward);
+  camera.getWorldPosition(camPos);
+
+  toCube.copy(cube.position).sub(camPos).normalize();
+  toText.copy(textMesh.position).sub(camPos).normalize();
+
+  const dotCube = camForward.dot(toCube);
+  const dotText = camForward.dot(toText);
+
+  return dotCube >= dotText ? 'cube' : 'text';
+}
+
 // --- Botó VR ---
 if (navigator.xr) {
   let resolved = false;
