@@ -2,26 +2,24 @@
 <html lang="ca">
 <head>
   <meta charset="UTF-8" />
-  <title>Touch & Teleport Cube</title>
+  <title>Touch Teleport Cube</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 </head>
 
 <body>
-  <a-scene
-    xr-mode-ui="enabled: true"
-    webxr="optionalFeatures: local-floor, bounded-floor">
+  <a-scene xr-mode-ui="enabled: true">
 
-    <!-- Càmera -->
+    <!-- Càmera (persona) -->
     <a-entity camera look-controls position="0 1.6 0"></a-entity>
 
     <a-sky color="#222233"></a-sky>
 
-    <!-- Cub que es mou quan el toquen -->
+    <!-- Cub molt a prop de la persona -->
     <a-box id="cube"
-           position="0 1.5 -2"
-           depth="0.4" height="0.4" width="0.4"
+           position="0 1.4 -0.8"
+           depth="0.3" height="0.3" width="0.3"
            color="orange">
     </a-box>
 
@@ -33,43 +31,35 @@
 
   <script>
     const cube = document.getElementById('cube');
+    const right = document.getElementById('rightController');
+    const left  = document.getElementById('leftController');
     const scene = document.querySelector('a-scene');
 
-    // Funció per posar el cub en una posició nova aleatòria
+    // Mou el cub a una posició nova
     function teleportCube() {
-      const x = (Math.random() - 0.5) * 4;   // entre -2 i 2
-      const y = 1 + Math.random() * 1.5;     // entre 1 i 2.5
-      const z = -1.5 - Math.random() * 3;    // entre -1.5 i -4.5
+      const x = (Math.random() - 0.5) * 1.5;   // molt a prop
+      const y = 1.2 + Math.random() * 0.6;     // al voltant del pit
+      const z = -0.6 - Math.random() * 1.0;    // davant la persona
       cube.setAttribute('position', `${x} ${y} ${z}`);
     }
 
-    scene.renderer.xr.addEventListener('sessionstart', () => {
-      const session = scene.renderer.xr.getSession();
-
+    scene.addEventListener('loaded', () => {
       function loop() {
-        const cubePos = cube.object3D.position;
+        const cubePos = new THREE.Vector3();
+        cube.object3D.getWorldPosition(cubePos);
 
-        for (const input of session.inputSources) {
-          if (!input.gamepad) continue;
+        const rPos = new THREE.Vector3();
+        right.object3D.getWorldPosition(rPos);
 
-          // Pose del mando
-          const frame = scene.renderer.xr.getFrame();
-          const refSpace = scene.renderer.xr.getReferenceSpace();
-          const pose = frame.getPose(input.targetRaySpace, refSpace);
-          if (!pose) continue;
+        const lPos = new THREE.Vector3();
+        left.object3D.getWorldPosition(lPos);
 
-          const p = pose.transform.position;
+        const distR = cubePos.distanceTo(rPos);
+        const distL = cubePos.distanceTo(lPos);
 
-          // Distància mando-cub
-          const dx = p.x - cubePos.x;
-          const dy = p.y - cubePos.y;
-          const dz = p.z - cubePos.z;
-          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-
-          // Si el mando "toca" el cub (radi ~0.3), teleporta
-          if (dist < 0.3) {
-            teleportCube();
-          }
+        // Si qualsevol mando entra dins el radi del cub → teleporta
+        if (distR < 0.25 || distL < 0.25) {
+          teleportCube();
         }
 
         requestAnimationFrame(loop);
