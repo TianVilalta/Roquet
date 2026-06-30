@@ -278,7 +278,9 @@ for (let i = 0; i < 4; i++) {
   const previewMat = new THREE.MeshStandardMaterial({ 
     map: previewTexture,
     transparent: true,
-    opacity: 0.8
+    opacity: 0.3,
+    roughness: 0.1,
+    metalness: 0.0
   });
   
   const materials = [
@@ -351,8 +353,8 @@ function buildRoom(themeIndex) {
   ceil.position.y = ROOM_HEIGHT;
   roomsGroup.add(ceil);
 
-  // Parets (vistes des de dins -> BackSide)
-  const wallMat = new THREE.MeshStandardMaterial({ color: theme.accent, side: THREE.BackSide });
+  // Parets (vistes des de dins -> BackSide) - grises
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.BackSide });
   const wallGeo = new THREE.BoxGeometry(ROOM_SIZE, ROOM_HEIGHT, ROOM_SIZE);
   const walls = new THREE.Mesh(wallGeo, wallMat);
   walls.position.y = ROOM_HEIGHT / 2;
