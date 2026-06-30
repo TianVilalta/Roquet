@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8" />
+  <title>Demo VR amb botó Hola</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- A-Frame: facilita crear escenes VR/WebXR -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <style>
+    #ui {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 999;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-family: sans-serif;
+    }
+    #holaMsg {
+      margin-top: 8px;
+      font-weight: bold;
+    }
+    button {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <!-- Interfície 2D sobre la web (es veu també abans d’entrar a VR) -->
+  <div id="ui">
+    <button id="holaBtn">Clica per dir "Hola"</button>
+    <div id="holaMsg"></div>
+  </div>
+
+  <!-- Escena VR -->
+  <a-scene vr-mode-ui="enabled: true">
+    <!-- Càmera i cursor (per mirar i seleccionar en VR) -->
+    <a-entity camera look-controls wasd-controls>
+      <a-entity 
+        cursor="fuse: true; fuseTimeout: 1000"
+        position="0 0 -1"
+        geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
+        material="color: white; shader: flat">
+      </a-entity>
+    </a-entity>
+
+    <!-- Cel i entorn -->
+    <a-sky color="#222233"></a-sky>
+
+    <!-- Terra -->
+    <a-plane position="0 0 0" rotation="-90 0 0" width="30" height="30" color="#444" shadow></a-plane>
+
+    <!-- Alguns cubs per veure l’espai -->
+    <a-box position="-2 1 -4" depth="1" height="1" width="1" color="#4CC3D9"></a-box>
+    <a-box position="2 1 -6" depth="1" height="1" width="1" color="#EF2D5E"></a-box>
+    <a-box position="0 2 -8" depth="1" height="1" width="1" color="#7BC8A4"></a-box>
+
+    <!-- Botó dins l’espai VR que també diu "Hola" quan el mires i fas clic -->
+    <a-entity id="vrButton"
+              geometry="primitive: box; width: 1; height: 0.5; depth: 0.2"
+              material="color: orange"
+              position="0 1.5 -3"
+              text="value: Clica aquí; align: center; color: black; width: 4">
+    </a-entity>
+  </a-scene>
+
+  <script>
+    // Botó 2D
+    const holaBtn = document.getElementById('holaBtn');
+    const holaMsg = document.getElementById('holaMsg');
+
+    holaBtn.addEventListener('click', () => {
+      holaMsg.textContent = 'Hola';
+    });
+
+    // Botó dins VR
+    const vrButton = document.getElementById('vrButton');
+    vrButton.addEventListener('click', () => {
+      holaMsg.textContent = 'Hola (clicat des de VR)';
+    });
+  </script>
+</body>
+</html>
