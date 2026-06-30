@@ -259,10 +259,14 @@ function handleControllerInput() {
     const bPressed = gp.buttons[5] && gp.buttons[5].pressed;
 
     if (aPressed && !buttonStates.a) {
-      nextColor();
+      const target = getFacingTarget();
+      if (target === 'cube') nextColor();
+      else nextTextColor();
     }
     if (bPressed && !buttonStates.b) {
-      prevColor();
+      const target = getFacingTarget();
+      if (target === 'cube') prevColor();
+      else prevTextColor();
     }
     buttonStates.a = aPressed;
     buttonStates.b = bPressed;
