@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VR Cub - Quest 3</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, sans-serif;
+    color: white;
+  }
+  #overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    text-align: center;
+    padding: 20px;
+    pointer-events: none;
+  }
+  #vrButton {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 14px 28px;
+    font-size: 18px;
+    background: #2266ff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  #vrButton:disabled {
+    background: #555;
+    cursor: not-allowed;
+  }
+  #status {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #aaa;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+  <h2>Cub VR — Quest 3</h2>
+  <div id="status">Carregant...</div>
+</div>
+<button id="vrButton" disabled>Comprovant suport VR...</button>
+
+<script type="module">
+import * as THREE from 'https://cdn.skypack.dev/three@0.160.0';
+import { VRButton } from 'https://cdn.skypack.dev/three@0.160.0/examples/jsm/webxr/VRButton.js';
+
+const statusEl = document.getElementById('status');
+const vrButton = document.getElementById('vrButton');
+
+// --- Comprovació de context segur (HTTPS) ---
+if (!window.isSecureContext) {
+  statusEl.textContent = "⚠️ Aquesta pàgina NO s'està servint per HTTPS. WebXR requereix un context segur. Puja-la a Netlify, GitHub Pages o similar.";
+  statusEl.style.color = "#ff6666";
+}
+
+// --- Escena ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202030);
+
+// Terra perquè es vegi l'espai
+const floorGeo = new THREE.PlaneGeometry(20, 20);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x444455 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
+
+// Quadrícula per donar sensació d'espai
+const grid = new THREE.GridHelper(20, 20, 0x888888, 0x333344);
+scene.add(grid);
+
+// Llums
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x222222, 1.2);
+scene.add(hemiLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(2, 4, 2);
+scene.add(dirLight);
+
+// Càmera
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// --- Cub ---
+const colors = [0xff3333, 0x33ff66, 0x3399ff, 0xffcc33, 0xcc33ff, 0xffffff];
+let colorIndex = 0;
+
+const cubeGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+const cubeMat = new THREE.MeshStandardMaterial({ color: colors[colorIndex] });
+const cube = new THREE.Mesh(cubeGeo, cubeMat);
+cube.position.set(0, 1.2, -1);
+scene.add(cube);
+
+function nextColor() {
+  colorIndex = (colorIndex + 1) % colors.length;
+  cube.material.color.setHex(colors[colorIndex]);
+}
+function prevColor() {
+  colorIndex = (colorIndex - 1 + colors.length) % colors.length;
+  cube.material.color.setHex(colors[colorIndex]);
+}
+
+// --- Botó VR ---
+if (navigator.xr) {
+  navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+    if (supported) {
+      vrButton.disabled = false;
+      vrButton.textContent = "Entrar en VR";
+      statusEl.textContent = "Llest. Posa't les ulleres i prem el botó.";
+      const xrBtn = VRButton.createButton(renderer);
+      // Substituïm el nostre botó pel de VRButton (mateix comportament, millor compatibilitat)
+      vrButton.replaceWith(xrBtn);
+      xrBtn.id = "vrButton";
+    } else {
+      vrButton.textContent = "VR immersiu no suportat en aquest navegador/dispositiu";
+      statusEl.textContent = "Obre aquesta pàgina amb el navegador del Quest 3 (Meta Browser) per HTTPS.";
+    }
+  });
+} else {
+  vrButton.textContent = "WebXR no disponible";
+  statusEl.textContent = "Aquest navegador no suporta WebXR. Fes servir el Meta Quest Browser.";
+}
+
+// --- Control de botons del mando dret (A i B) ---
+// gamepad.buttons índex habitual al Quest:
+// 0 = trigger, 1 = grip, 3 = thumbstick click, 4 = A (right) / X (left), 5 = B (right) / Y (left)
+const buttonStates = {}; // per evitar repeticions mentre es manté premut
+
+function handleControllerInput() {
+  const session = renderer.xr.getSession();
+  if (!session) return;
+
+  for (const source of session.inputSources) {
+    if (!source.gamepad || source.handedness !== 'right') continue;
+
+    const gp = source.gamepad;
+    const aPressed = gp.buttons[4] && gp.buttons[4].pressed;
+    const bPressed = gp.buttons[5] && gp.buttons[5].pressed;
+
+    if (aPressed && !buttonStates.a) {
+      nextColor();
+    }
+    if (bPressed && !buttonStates.b) {
+      prevColor();
+    }
+    buttonStates.a = aPressed;
+    buttonStates.b = bPressed;
+  }
+}
+
+// --- Animació ---
+function animate() {
+  cube.rotation.y += 0.01;
+  cube.rotation.x += 0.005;
+  handleControllerInput();
+  renderer.render(scene, camera);
+}
+renderer.setAnimationLoop(animate);
+
+// --- Resize ---
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
