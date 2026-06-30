@@ -6,71 +6,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-  <style>
-    #debug {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      z-index: 999;
-      background: rgba(0,0,0,0.7);
-      color: #0f0;
-      padding: 15px;
-      font-size: 20px;
-      font-family: monospace;
-      border-radius: 10px;
-      width: 400px;
-      white-space: pre-line;
-    }
-  </style>
 </head>
 
 <body>
-  <div id="debug">Esperant dades del mando...</div>
-
   <a-scene
     xr-mode-ui="enabled: true"
     webxr="optionalFeatures: local-floor, bounded-floor">
 
-    <a-entity camera look-controls></a-entity>
+    <!-- Càmera -->
+    <a-entity id="cam" camera look-controls position="0 1.6 0"></a-entity>
+
     <a-sky color="#222233"></a-sky>
 
     <!-- Mandos -->
     <a-entity id="rightController" oculus-touch-controls="hand: right"></a-entity>
     <a-entity id="leftController"  oculus-touch-controls="hand: left"></a-entity>
 
+    <!-- Text 3D visible en VR -->
+    <a-entity id="debugText"
+              text="value: Carregant...; color: yellow; width: 3"
+              position="0 1.2 -1.5">
+    </a-entity>
+
   </a-scene>
 
   <script>
-    const debug = document.getElementById('debug');
+    const debugText = document.getElementById('debugText');
     const scene = document.querySelector('a-scene');
 
     scene.renderer.xr.addEventListener('sessionstart', () => {
       const session = scene.renderer.xr.getSession();
 
       function loop() {
-        let text = "";
+        let output = "";
 
         for (const input of session.inputSources) {
           if (!input.gamepad) continue;
 
-          text += `Mando: ${input.handedness}\n`;
+          output += `Mando: ${input.handedness}\n`;
 
           // Botons
           input.gamepad.buttons.forEach((btn, i) => {
-            text += `Botó ${i}: ${btn.pressed ? "PREMUT" : "no"}\n`;
+            if (btn.pressed) {
+              output += `Botó ${i}: PREMUT\n`;
+            }
           });
 
-          // Joysticks
+          // Joystick
           if (input.gamepad.axes.length >= 4) {
-            text += `Joystick X: ${input.gamepad.axes[2].toFixed(3)}\n`;
-            text += `Joystick Y: ${input.gamepad.axes[3].toFixed(3)}\n`;
+            output += `Stick X: ${input.gamepad.axes[2].toFixed(3)}\n`;
+            output += `Stick Y: ${input.gamepad.axes[3].toFixed(3)}\n`;
           }
 
-          text += `\n----------------------\n\n`;
+          output += "\n";
         }
 
-        debug.textContent = text || "No hi ha mandos detectats";
+        debugText.setAttribute("text", "value: " + (output || "No hi ha mandos detectats"));
 
         requestAnimationFrame(loop);
       }
