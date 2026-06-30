@@ -134,10 +134,10 @@ hubGroup.add(hubGrid);
 
 // --- Definició de les 4 sales temàtiques ---
 const themes = [
-  { name: 'Sala Vermella',  color: 0xff3333, accent: 0xffaaaa, label: 'FOC' },
-  { name: 'Sala Verda',     color: 0x33cc66, accent: 0xaaffaa, label: 'BOSC' },
-  { name: 'Sala Blava',     color: 0x3399ff, accent: 0xaaddff, label: 'GEL' },
-  { name: 'Sala Groga',     color: 0xffcc33, accent: 0xffeeaa, label: 'SORRA' }
+  { name: 'Productes',  color: 0xff3333, accent: 0xffaaaa, floorColor: 0xcc2222, label: 'Productes' },
+  { name: 'Historia',   color: 0x33cc66, accent: 0xaaffaa, floorColor: 0x229944, label: 'Historia' },
+  { name: 'Grup',       color: 0x3399ff, accent: 0xaaddff, floorColor: 0x2266cc, label: 'Grup' },
+  { name: 'Aplicacions',color: 0xffcc33, accent: 0xffeeaa, floorColor: 0xcc9922, label: 'Aplicacions' }
 ];
 
 const CUBE_BASE_SIZE = 0.3;
@@ -166,14 +166,114 @@ function makeLabelCanvas(text, bgHex) {
   return canvas;
 }
 
+function makeRoomPreviewCanvas(themeIndex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  
+  const theme = themes[themeIndex];
+  const colorHex = '#' + new THREE.Color(theme.color).getHexString();
+  const accentHex = '#' + new THREE.Color(theme.accent).getHexString();
+  
+  // Fons: color del terra (més fosc)
+  ctx.fillStyle = colorHex;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Parets (costats)
+  ctx.fillStyle = accentHex;
+  ctx.fillRect(0, 0, 40, canvas.height); // esquerra
+  ctx.fillRect(canvas.width - 40, 0, 40, canvas.height); // dreta
+  
+  // Sostre (part superior)
+  ctx.fillStyle = '#111111';
+  ctx.fillRect(0, 0, canvas.width, 50);
+  
+  // Efecte de difuminat: afegir gradient
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  gradient.addColorStop(0, colorHex + '33');
+  gradient.addColorStop(0.5, colorHex + '00');
+  gradient.addColorStop(1, accentHex + '33');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Alguns detalls segons tema (molt subtils)
+  if (themeIndex === 0) {
+    // FOC: cercles de color còlid al centre
+    ctx.fillStyle = '#ff880033';
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2 + (Math.random() - 0.5) * 60, 
+              canvas.height / 2 + (Math.random() - 0.5) * 60, 
+              20 + Math.random() * 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (themeIndex === 1) {
+    // BOSC: línies verticals subtils
+    ctx.strokeStyle = '#33661133';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      ctx.moveTo(30 + i * 28, 0);
+      ctx.lineTo(30 + i * 28, canvas.height);
+      ctx.stroke();
+    }
+  } else if (themeIndex === 2) {
+    // GEL: diamants/cristalls
+    ctx.strokeStyle = '#66ddff66';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 4; i++) {
+      const x = 50 + i * 50;
+      const y = 80;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 20);
+      ctx.lineTo(x + 20, y);
+      ctx.lineTo(x, y + 20);
+      ctx.lineTo(x - 20, y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+  } else {
+    // SORRA: ondulacions
+    ctx.strokeStyle = '#ccaa6644';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 100 + i * 30);
+      for (let x = 0; x < canvas.width; x += 20) {
+        ctx.lineTo(x, 100 + i * 30 + Math.sin(x * 0.05) * 8);
+      }
+      ctx.stroke();
+    }
+  }
+  
+  return canvas;
+}
+
 for (let i = 0; i < 4; i++) {
   const angle = (i / 4) * Math.PI * 2;
   const x = Math.sin(angle) * CUBE_RADIUS;
   const z = -Math.cos(angle) * CUBE_RADIUS;
 
   const geo = new THREE.BoxGeometry(CUBE_BASE_SIZE, CUBE_BASE_SIZE, CUBE_BASE_SIZE);
-  const mat = new THREE.MeshStandardMaterial({ color: themes[i].color });
-  const mesh = new THREE.Mesh(geo, mat);
+  
+  // Crear materials per a cada cara: 5 del tema, 1 amb la previsualització
+  const previewCanvas = makeRoomPreviewCanvas(i);
+  const previewTexture = new THREE.CanvasTexture(previewCanvas);
+  
+  const themeMat = new THREE.MeshStandardMaterial({ color: themes[i].color });
+  const previewMat = new THREE.MeshStandardMaterial({ map: previewTexture });
+  
+  const materials = [
+    themeMat,        // X+
+    themeMat,        // X-
+    themeMat,        // Y+
+    previewMat,      // Y- (fons amb previsualització)
+    themeMat,        // Z+
+    themeMat         // Z-
+  ];
+  
+  const mesh = new THREE.Mesh(geo, materials);
   mesh.position.set(x, CUBE_HEIGHT, z);
   hubGroup.add(mesh);
 
@@ -220,10 +320,11 @@ function buildRoom(themeIndex) {
   const ROOM_SIZE = 10;
   const ROOM_HEIGHT = 5;
 
-  // Terra
+  // Terra - sense decoració, només color solid
   const floorMat = new THREE.MeshStandardMaterial({ color: theme.color });
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_SIZE, ROOM_SIZE), floorMat);
   floor.rotation.x = -Math.PI / 2;
+  floor.position.y = 0.001; // Petit offset per evitar que es vegi la paret inferior
   roomsGroup.add(floor);
 
   // Sostre
@@ -244,67 +345,6 @@ function buildRoom(themeIndex) {
   const roomLight = new THREE.PointLight(theme.color, 1.2, 15);
   roomLight.position.set(0, ROOM_HEIGHT - 0.5, 0);
   roomsGroup.add(roomLight);
-
-  // Decoració diferent per tema
-  const decoMat = new THREE.MeshStandardMaterial({ color: theme.color });
-  if (themeIndex === 0) {
-    // FOC: columnes + boles "brasa" flotants
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const px = Math.sin(a) * 3.5;
-      const pz = Math.cos(a) * 3.5;
-      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3, 12), decoMat);
-      col.position.set(px, 1.5, pz);
-      roomsGroup.add(col);
-      const ember = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12),
-        new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff3300, emissiveIntensity: 1 }));
-      ember.position.set(px, 3.2, pz);
-      roomsGroup.add(ember);
-    }
-  } else if (themeIndex === 1) {
-    // BOSC: "arbres" fets amb cons + cilindres
-    for (let i = 0; i < 8; i++) {
-      const px = (Math.random() - 0.5) * 8;
-      const pz = (Math.random() - 0.5) * 8;
-      if (Math.abs(px) < 1 && Math.abs(pz) < 1) continue;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 1.2, 8),
-        new THREE.MeshStandardMaterial({ color: 0x553311 }));
-      trunk.position.set(px, 0.6, pz);
-      roomsGroup.add(trunk);
-      const leaves = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 10), decoMat);
-      leaves.position.set(px, 1.8, pz);
-      roomsGroup.add(leaves);
-    }
-  } else if (themeIndex === 2) {
-    // GEL: blocs de "gel" (cubs translúcids) i cristalls
-    for (let i = 0; i < 10; i++) {
-      const px = (Math.random() - 0.5) * 8;
-      const pz = (Math.random() - 0.5) * 8;
-      const s = 0.4 + Math.random() * 0.6;
-      const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0),
-        new THREE.MeshStandardMaterial({ color: theme.color, transparent: true, opacity: 0.7, roughness: 0.1 }));
-      ice.position.set(px, s, pz);
-      roomsGroup.add(ice);
-    }
-  } else {
-    // SORRA: dunes (esferes aixafades) + "cactus"
-    for (let i = 0; i < 6; i++) {
-      const px = (Math.random() - 0.5) * 7;
-      const pz = (Math.random() - 0.5) * 7;
-      const dune = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), decoMat);
-      dune.scale.set(1.5, 0.3, 1.5);
-      dune.position.set(px, 0.1, pz);
-      roomsGroup.add(dune);
-    }
-    for (let i = 0; i < 4; i++) {
-      const px = (Math.random() - 0.5) * 6;
-      const pz = (Math.random() - 0.5) * 6;
-      const cactus = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1.4, 8),
-        new THREE.MeshStandardMaterial({ color: 0x2e8b57 }));
-      cactus.position.set(px, 0.7, pz);
-      roomsGroup.add(cactus);
-    }
-  }
 
   // Text central amb el nom de la sala
   const labelCanvas = makeLabelCanvas(theme.name, theme.color);
