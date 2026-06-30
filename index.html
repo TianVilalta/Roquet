@@ -2,7 +2,7 @@
 <html lang="ca">
 <head>
   <meta charset="UTF-8" />
-  <title>Joystick Control VR</title>
+  <title>Joystick VR Control</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -19,26 +19,20 @@
     <a-sky color="#222233"></a-sky>
 
     <!-- Cub que es mou amb el joystick -->
-    <a-box id="moveCube"
+    <a-box id="cube"
            position="0 1.5 -2"
            depth="0.5" height="0.5" width="0.5"
            color="orange">
     </a-box>
 
-    <!-- Mando dret -->
-    <a-entity id="rightController"
-              oculus-touch-controls="hand: right">
-    </a-entity>
-
-    <!-- Mando esquerre -->
-    <a-entity id="leftController"
-              oculus-touch-controls="hand: left">
-    </a-entity>
+    <!-- Mandos -->
+    <a-entity id="rightController" oculus-touch-controls="hand: right"></a-entity>
+    <a-entity id="leftController"  oculus-touch-controls="hand: left"></a-entity>
 
   </a-scene>
 
   <script>
-    const cube = document.getElementById('moveCube');
+    const cube = document.getElementById('cube');
     const scene = document.querySelector('a-scene');
 
     let x = 0;
@@ -48,29 +42,30 @@
     scene.renderer.xr.addEventListener('sessionstart', () => {
       const session = scene.renderer.xr.getSession();
 
-      function update() {
+      function loop() {
+        const frame = scene.renderer.xr.getFrame();
+
         for (const input of session.inputSources) {
-          if (input.gamepad && input.handedness === "right") {
+          if (!input.gamepad) continue;
+          if (input.handedness !== "right") continue;
 
-            // Joystick del mando dret (Quest 3)
-            const stickX = input.gamepad.axes[2]; // esquerra/dreta
-            const stickY = input.gamepad.axes[3]; // endavant/enrere
+          // JOYSTICK DEL MANDO DRET (Meta Quest 3)
+          const stickX = input.gamepad.axes[2]; // esquerra/dreta
+          const stickY = input.gamepad.axes[3]; // endavant/enrere
 
-            // Velocitat del moviment
-            const speed = 0.05;
+          const speed = 0.05;
 
-            // Actualitzar posició del cub
-            x += stickX * speed;
-            z += stickY * speed;
+          // Actualitzar posició del cub
+          x += stickX * speed;
+          z += stickY * speed;
 
-            cube.setAttribute('position', `${x} ${y} ${z}`);
-          }
+          cube.setAttribute("position", `${x} ${y} ${z}`);
         }
 
-        requestAnimationFrame(update);
+        requestAnimationFrame(loop);
       }
 
-      update();
+      loop();
     });
   </script>
 </body>
