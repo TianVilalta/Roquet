@@ -56,12 +56,32 @@
 </div>
 <button id="vrButton" disabled>Comprovant suport VR...</button>
 
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script>
+  // Captura qualsevol error de càrrega del mòdul perquè es vegi a la pantalla
+  window.addEventListener('error', (e) => {
+    const s = document.getElementById('status');
+    if (s) { s.textContent = "Error: " + (e.message || e); s.style.color = "#ff6666"; }
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const s = document.getElementById('status');
+    if (s) { s.textContent = "Error carregant: " + (e.reason && e.reason.message ? e.reason.message : e.reason); s.style.color = "#ff6666"; }
+  });
+</script>
 <script type="module">
-import * as THREE from 'https://cdn.skypack.dev/three@0.160.0';
-import { VRButton } from 'https://cdn.skypack.dev/three@0.160.0/examples/jsm/webxr/VRButton.js';
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 const statusEl = document.getElementById('status');
 const vrButton = document.getElementById('vrButton');
+statusEl.textContent = "Three.js carregat. Comprovant suport VR...";
 
 // --- Comprovació de context segur (HTTPS) ---
 if (!window.isSecureContext) {
@@ -122,7 +142,18 @@ function prevColor() {
 
 // --- Botó VR ---
 if (navigator.xr) {
+  let resolved = false;
+
+  // Si isSessionSupported triga més de 5s, avisem (no hauria de passar, però per si de cas)
+  setTimeout(() => {
+    if (!resolved) {
+      statusEl.textContent = "La comprovació de suport VR està trigant massa. Pot ser un problema del navegador. Prova de recarregar.";
+      statusEl.style.color = "#ffaa00";
+    }
+  }, 5000);
+
   navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+    resolved = true;
     if (supported) {
       vrButton.disabled = false;
       vrButton.textContent = "Entrar en VR";
@@ -135,6 +166,11 @@ if (navigator.xr) {
       vrButton.textContent = "VR immersiu no suportat en aquest navegador/dispositiu";
       statusEl.textContent = "Obre aquesta pàgina amb el navegador del Quest 3 (Meta Browser) per HTTPS.";
     }
+  }).catch((err) => {
+    resolved = true;
+    vrButton.textContent = "Error comprovant suport VR";
+    statusEl.textContent = "Error: " + err.message;
+    statusEl.style.color = "#ff6666";
   });
 } else {
   vrButton.textContent = "WebXR no disponible";
