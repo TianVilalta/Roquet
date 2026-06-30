@@ -154,10 +154,24 @@ function makeLabelCanvas(text, bgHex) {
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#' + new THREE.Color(bgHex).getHexString();
-  ctx.globalAlpha = 0.85;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.globalAlpha = 1;
+  
+  // Fons gris amb esquines redondeades
+  const radius = 40;
+  ctx.fillStyle = '#888888';
+  ctx.beginPath();
+  ctx.moveTo(radius, 0);
+  ctx.lineTo(canvas.width - radius, 0);
+  ctx.quadraticCurveTo(canvas.width, 0, canvas.width, radius);
+  ctx.lineTo(canvas.width, canvas.height - radius);
+  ctx.quadraticCurveTo(canvas.width, canvas.height, canvas.width - radius, canvas.height);
+  ctx.lineTo(radius, canvas.height);
+  ctx.quadraticCurveTo(0, canvas.height, 0, canvas.height - radius);
+  ctx.lineTo(0, radius);
+  ctx.quadraticCurveTo(0, 0, radius, 0);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Text negre
   ctx.fillStyle = '#000000';
   ctx.font = 'bold 70px Arial';
   ctx.textAlign = 'center';
@@ -257,20 +271,23 @@ for (let i = 0; i < 4; i++) {
 
   const geo = new THREE.BoxGeometry(CUBE_BASE_SIZE, CUBE_BASE_SIZE, CUBE_BASE_SIZE);
   
-  // Crear materials per a cada cara: 5 del tema, 1 amb la previsualització
+  // Crear materials: cubos transparents que mostren la previsualització
   const previewCanvas = makeRoomPreviewCanvas(i);
   const previewTexture = new THREE.CanvasTexture(previewCanvas);
   
-  const themeMat = new THREE.MeshStandardMaterial({ color: themes[i].color });
-  const previewMat = new THREE.MeshStandardMaterial({ map: previewTexture });
+  const previewMat = new THREE.MeshStandardMaterial({ 
+    map: previewTexture,
+    transparent: true,
+    opacity: 0.8
+  });
   
   const materials = [
-    themeMat,        // X+
-    themeMat,        // X-
-    themeMat,        // Y+
+    previewMat,      // X+
+    previewMat,      // X-
+    previewMat,      // Y+
     previewMat,      // Y- (fons amb previsualització)
-    themeMat,        // Z+
-    themeMat         // Z-
+    previewMat,      // Z+
+    previewMat       // Z-
   ];
   
   const mesh = new THREE.Mesh(geo, materials);
@@ -320,8 +337,8 @@ function buildRoom(themeIndex) {
   const ROOM_SIZE = 10;
   const ROOM_HEIGHT = 5;
 
-  // Terra - sense decoració, només color solid
-  const floorMat = new THREE.MeshStandardMaterial({ color: theme.color });
+  // Terra - color negre
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_SIZE, ROOM_SIZE), floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0.001; // Petit offset per evitar que es vegi la paret inferior
