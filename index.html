@@ -2,28 +2,38 @@
 <html lang="ca">
 <head>
   <meta charset="UTF-8" />
-  <title>Joystick VR Control</title>
+  <title>VR Controller Debug</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <style>
+    #debug {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 999;
+      background: rgba(0,0,0,0.7);
+      color: #0f0;
+      padding: 15px;
+      font-size: 20px;
+      font-family: monospace;
+      border-radius: 10px;
+      width: 400px;
+      white-space: pre-line;
+    }
+  </style>
 </head>
 
 <body>
+  <div id="debug">Esperant dades del mando...</div>
+
   <a-scene
     xr-mode-ui="enabled: true"
     webxr="optionalFeatures: local-floor, bounded-floor">
 
-    <!-- Càmera -->
     <a-entity camera look-controls></a-entity>
-
     <a-sky color="#222233"></a-sky>
-
-    <!-- Cub que es mou amb el joystick -->
-    <a-box id="cube"
-           position="0 1.5 -2"
-           depth="0.5" height="0.5" width="0.5"
-           color="orange">
-    </a-box>
 
     <!-- Mandos -->
     <a-entity id="rightController" oculus-touch-controls="hand: right"></a-entity>
@@ -32,35 +42,35 @@
   </a-scene>
 
   <script>
-    const cube = document.getElementById('cube');
+    const debug = document.getElementById('debug');
     const scene = document.querySelector('a-scene');
-
-    let x = 0;
-    let y = 1.5;
-    let z = -2;
 
     scene.renderer.xr.addEventListener('sessionstart', () => {
       const session = scene.renderer.xr.getSession();
 
       function loop() {
-        const frame = scene.renderer.xr.getFrame();
+        let text = "";
 
         for (const input of session.inputSources) {
           if (!input.gamepad) continue;
-          if (input.handedness !== "right") continue;
 
-          // JOYSTICK DEL MANDO DRET (Meta Quest 3)
-          const stickX = input.gamepad.axes[2]; // esquerra/dreta
-          const stickY = input.gamepad.axes[3]; // endavant/enrere
+          text += `Mando: ${input.handedness}\n`;
 
-          const speed = 0.05;
+          // Botons
+          input.gamepad.buttons.forEach((btn, i) => {
+            text += `Botó ${i}: ${btn.pressed ? "PREMUT" : "no"}\n`;
+          });
 
-          // Actualitzar posició del cub
-          x += stickX * speed;
-          z += stickY * speed;
+          // Joysticks
+          if (input.gamepad.axes.length >= 4) {
+            text += `Joystick X: ${input.gamepad.axes[2].toFixed(3)}\n`;
+            text += `Joystick Y: ${input.gamepad.axes[3].toFixed(3)}\n`;
+          }
 
-          cube.setAttribute("position", `${x} ${y} ${z}`);
+          text += `\n----------------------\n\n`;
         }
+
+        debug.textContent = text || "No hi ha mandos detectats";
 
         requestAnimationFrame(loop);
       }
