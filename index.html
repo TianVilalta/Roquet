@@ -2,86 +2,83 @@
 <html lang="ca">
 <head>
   <meta charset="UTF-8" />
-  <title>Demo VR amb botó Hola</title>
+  <title>VR Mans amb càmera</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- A-Frame: facilita crear escenes VR/WebXR -->
+  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-  <style>
-    #ui {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      z-index: 999;
-      background: rgba(0,0,0,0.6);
-      color: #fff;
-      padding: 10px 15px;
-      border-radius: 8px;
-      font-family: sans-serif;
-    }
-    #holaMsg {
-      margin-top: 8px;
-      font-weight: bold;
-    }
-    button {
-      cursor: pointer;
-    }
-  </style>
+  <!-- MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 </head>
+
 <body>
-  <!-- Interfície 2D sobre la web (es veu també abans d’entrar a VR) -->
-  <div id="ui">
-    <button id="holaBtn">Clica per dir "Hola"</button>
-    <div id="holaMsg"></div>
-  </div>
+  <!-- Vídeo ocult de la càmera -->
+  <video id="video" style="display:none;" playsinline></video>
 
   <!-- Escena VR -->
   <a-scene vr-mode-ui="enabled: true">
-    <!-- Càmera i cursor (per mirar i seleccionar en VR) -->
-    <a-entity camera look-controls wasd-controls>
-      <a-entity 
-        cursor="fuse: true; fuseTimeout: 1000"
-        position="0 0 -1"
-        geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
-        material="color: white; shader: flat">
-      </a-entity>
-    </a-entity>
+    <a-entity camera look-controls wasd-controls></a-entity>
 
-    <!-- Cel i entorn -->
     <a-sky color="#222233"></a-sky>
+    <a-plane rotation="-90 0 0" width="30" height="30" color="#444"></a-plane>
 
-    <!-- Terra -->
-    <a-plane position="0 0 0" rotation="-90 0 0" width="30" height="30" color="#444" shadow></a-plane>
-
-    <!-- Alguns cubs per veure l’espai -->
-    <a-box position="-2 1 -4" depth="1" height="1" width="1" color="#4CC3D9"></a-box>
-    <a-box position="2 1 -6" depth="1" height="1" width="1" color="#EF2D5E"></a-box>
-    <a-box position="0 2 -8" depth="1" height="1" width="1" color="#7BC8A4"></a-box>
-
-    <!-- Botó dins l’espai VR que també diu "Hola" quan el mires i fas clic -->
-    <a-entity id="vrButton"
-              geometry="primitive: box; width: 1; height: 0.5; depth: 0.2"
-              material="color: orange"
-              position="0 1.5 -3"
-              text="value: Clica aquí; align: center; color: black; width: 4">
-    </a-entity>
+    <!-- Contenidor de punts de la mà -->
+    <a-entity id="handPoints"></a-entity>
   </a-scene>
 
   <script>
-    // Botó 2D
-    const holaBtn = document.getElementById('holaBtn');
-    const holaMsg = document.getElementById('holaMsg');
+    const video = document.getElementById('video');
+    const handPoints = document.getElementById('handPoints');
 
-    holaBtn.addEventListener('click', () => {
-      holaMsg.textContent = 'Hola';
+    // Crear 21 punts 3D per la mà
+    const points = [];
+    for (let i = 0; i < 21; i++) {
+      const p = document.createElement('a-sphere');
+      p.setAttribute('radius', '0.03');
+      p.setAttribute('color', 'yellow');
+      handPoints.appendChild(p);
+      points.push(p);
+    }
+
+    // Configurar MediaPipe Hands
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
 
-    // Botó dins VR
-    const vrButton = document.getElementById('vrButton');
-    vrButton.addEventListener('click', () => {
-      holaMsg.textContent = 'Hola (clicat des de VR)';
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
     });
+
+    hands.onResults(results => {
+      if (!results.multiHandLandmarks.length) return;
+
+      const lm = results.multiHandLandmarks[0];
+
+      lm.forEach((pt, i) => {
+        // Convertir coordenades 0..1 a espai 3D
+        const x = (pt.x - 0.5) * -4;
+        const y = (0.5 - pt.y) * 3;
+        const z = -3 + pt.z * 2;
+
+        points[i].setAttribute('position', `${x} ${y} ${z}`);
+      });
+    });
+
+    // Activar càmera
+    const camera = new Camera(video, {
+      onFrame: async () => {
+        await hands.send({image: video});
+      },
+      width: 640,
+      height: 480
+    });
+
+    camera.start();
   </script>
 </body>
 </html>
