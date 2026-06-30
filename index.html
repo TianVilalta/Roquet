@@ -11,11 +11,22 @@
   <!-- MediaPipe Hands -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <style>
+    #video {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      width: 200px;
+      border: 2px solid white;
+      z-index: 999;
+    }
+  </style>
 </head>
 
 <body>
-  <!-- Vídeo ocult de la càmera -->
-  <video id="video" style="display:none;" playsinline></video>
+  <!-- Vídeo visible per comprovar que funciona -->
+  <video id="video" playsinline></video>
 
   <!-- Escena VR -->
   <a-scene vr-mode-ui="enabled: true">
