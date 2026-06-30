@@ -28,22 +28,10 @@
 
   <a-scene
     xr-mode-ui="enabled: true"
-    webxr="optionalFeatures: local-floor, bounded-floor, hand-tracking, layers">
+    webxr="optionalFeatures: local-floor, bounded-floor">
 
-    <!-- Càmera -->
     <a-entity camera look-controls></a-entity>
-
     <a-sky color="#222233"></a-sky>
-
-    <!-- Mando esquerre -->
-    <a-entity id="leftController"
-              laser-controls="hand: left">
-    </a-entity>
-
-    <!-- Mando dret -->
-    <a-entity id="rightController"
-              laser-controls="hand: right">
-    </a-entity>
 
     <!-- Botó VR -->
     <a-box id="vrButton"
@@ -53,13 +41,26 @@
            text="value: Clica aquí; align: center; color: black; width: 4">
     </a-box>
 
+    <!-- Mando dret -->
+    <a-entity id="rightController"
+              raycaster="objects: #vrButton"
+              line="color: cyan; opacity: 1"
+              oculus-touch-controls="hand: right">
+    </a-entity>
+
+    <!-- Mando esquerre -->
+    <a-entity id="leftController"
+              raycaster="objects: #vrButton"
+              line="color: cyan; opacity: 1"
+              oculus-touch-controls="hand: left">
+    </a-entity>
+
   </a-scene>
 
   <script>
     const msg = document.getElementById('msg');
     const vrButton = document.getElementById('vrButton');
 
-    // Quan el botó rep un "click" del mando
     vrButton.addEventListener('click', () => {
       msg.textContent = "Hola";
     });
