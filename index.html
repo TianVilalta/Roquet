@@ -280,7 +280,9 @@ for (let i = 0; i < 4; i++) {
     transparent: true,
     opacity: 0.3,
     roughness: 0.1,
-    metalness: 0.0
+    metalness: 0.0,
+    emissive: previewTexture,
+    emissiveIntensity: 0.5
   });
   
   const materials = [
@@ -377,6 +379,10 @@ function buildRoom(themeIndex) {
 // --- Estat general ---
 let state = 'hub'; // 'hub' o 'room'
 let activeRoomIndex = -1;
+let transitionActive = false;
+let transitionProgress = 0;
+let transitionDuration = 1.0; // durada en segons
+let transitionStartTime = 0;
 
 // --- Botó VR ---
 if (navigator.xr) {
@@ -436,11 +442,12 @@ function getLookedCubeIndex() {
 
 // --- Entrar / sortir de sala ---
 function enterRoom(index) {
-  state = 'room';
+  if (transitionActive) return; // Prevenir transicions múltiples
+  transitionActive = true;
+  transitionProgress = 0;
+  transitionStartTime = Date.now();
   activeRoomIndex = index;
   buildRoom(index);
-  hubGroup.visible = false;
-  roomsGroup.visible = true;
 }
 
 function exitRoom() {
@@ -511,35 +518,78 @@ function updateControllerInfo(frame) {
 const ROTATION_SPEED_Y = 0.01;
 const ROTATION_SPEED_X = 0.005;
 
+function updateTransition() {
+  const elapsed = (Date.now() - transitionStartTime) / 1000;
+  transitionProgress = Math.min(elapsed / transitionDuration, 1);
+  
+  if (transitionProgress >= 1) {
+    // Transició completada
+    transitionActive = false;
+    state = 'room';
+    hubGroup.visible = false;
+    roomsGroup.visible = true;
+    
+    // Restaurar escala del cubo
+    const targetCube = cubes[activeRoomIndex];
+    targetCube.mesh.scale.set(1, 1, 1);
+  }
+}
+
 function updateHub(dt) {
-  const lookedIndex = state === 'hub' ? getLookedCubeIndex() : -1;
+  const lookedIndex = state === 'hub' && !transitionActive ? getLookedCubeIndex() : -1;
 
   for (let i = 0; i < cubes.length; i++) {
     const c = cubes[i];
-    c.mesh.rotation.y += ROTATION_SPEED_Y;
-    c.mesh.rotation.x += ROTATION_SPEED_X;
+    
+    if (transitionActive && i === activeRoomIndex) {
+      // Animar el cubo durant la transició
+      const scale = 1 + transitionProgress * 15; // Creix a mida que passa el temps
+      c.mesh.scale.set(scale, scale, scale);
+      
+      // Fer-lo transparent gradualment
+      for (let mat of c.mesh.material) {
+        mat.opacity = 0.3 * (1 - transitionProgress);
+        mat.emissiveIntensity = 0.5 * (1 - transitionProgress);
+      }
+      
+      // Rotació accelerada
+      c.mesh.rotation.y += ROTATION_SPEED_Y * (1 + transitionProgress * 2);
+      c.mesh.rotation.x += ROTATION_SPEED_X * (1 + transitionProgress * 2);
+    } else if (!transitionActive) {
+      // Comportament normal del hub
+      c.mesh.rotation.y += ROTATION_SPEED_Y;
+      c.mesh.rotation.x += ROTATION_SPEED_X;
 
-    const isLooked = (i === lookedIndex);
-    // Progrés suau cap a 1 (mirat) o 0 (no mirat)
-    const targetProgress = isLooked ? 1 : 0;
-    c.lookProgress += (targetProgress - c.lookProgress) * 0.12;
+      const isLooked = (i === lookedIndex);
+      const targetProgress = isLooked ? 1 : 0;
+      c.lookProgress += (targetProgress - c.lookProgress) * 0.12;
 
-    const scale = CUBE_BASE_SIZE + (CUBE_HOVER_SIZE - CUBE_BASE_SIZE) * c.lookProgress;
-    const s = scale / CUBE_BASE_SIZE;
-    c.mesh.scale.set(s, s, s);
+      const scale = CUBE_BASE_SIZE + (CUBE_HOVER_SIZE - CUBE_BASE_SIZE) * c.lookProgress;
+      const s = scale / CUBE_BASE_SIZE;
+      c.mesh.scale.set(s, s, s);
+      
+      // Restaurar opacitat si estava en transició
+      for (let mat of c.mesh.material) {
+        mat.opacity = 0.3;
+        mat.emissiveIntensity = 0.5;
+      }
 
-    // Text: surt de dins del cub (y = centre) cap amunt
-    const td = textMeshes[i];
-    const startY = CUBE_HEIGHT;
-    const endY = CUBE_HEIGHT + 0.5;
-    td.mesh.position.y = startY + (endY - startY) * c.lookProgress;
-    td.mesh.material.opacity = c.lookProgress;
-    td.mesh.lookAt(camPos);
+      // Text: surt de dins del cub (y = centre) cap amunt
+      const td = textMeshes[i];
+      const startY = CUBE_HEIGHT;
+      const endY = CUBE_HEIGHT + 0.5;
+      td.mesh.position.y = startY + (endY - startY) * c.lookProgress;
+      td.mesh.material.opacity = c.lookProgress;
+      td.mesh.lookAt(camPos);
+    }
   }
 }
 
 function animate(time, frame) {
-  if (state === 'hub') {
+  if (transitionActive) {
+    updateTransition();
+    updateHub();
+  } else if (state === 'hub') {
     updateHub();
   }
   handleControllerInput();
