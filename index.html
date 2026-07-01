@@ -117,7 +117,7 @@ scene.add(dirLight);
 // ─── HUD 3D subjecte a la càmera (segueix la vista) ─────────────────
 const hud3D = new THREE.Group();
 camera.add(hud3D);
-hud3D.position.set(0, -0.45, -1.0);
+hud3D.position.set(0, -0.35, -0.9);
 hud3D.rotation.set(0, 0, 0);
 
 // fons semi-transparent del HUD
@@ -173,11 +173,10 @@ function drawControllerPreview(ctx) {
 drawControllerPreview(cctx);
 const ctrlTex = new THREE.CanvasTexture(ctrlCanvas);
 const ctrlMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(0.22, 0.08),
-  new THREE.MeshBasicMaterial({ map: ctrlTex, transparent: true })
-);
-ctrlMesh.position.set(0.08, -0.02, 0.01);
-hud3D.add(ctrlMesh);
+    new THREE.PlaneGeometry(0.26, 0.10),
+    new THREE.MeshBasicMaterial({ map: ctrlTex, transparent: true })
+  );
+  ctrlMesh.position.set(0, -0.03, 0.01);
 
 // ─── TEMES ────────────────────────────────────────────────────────────
 const themes = [
@@ -192,7 +191,7 @@ const themes = [
     text2: 'Ctra. Sant Hipòlit, 10                                            ​08500 , Vic, Barcelona, España' },
   { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png',
     text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
-    text2: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra                                                   08540 , Centelles, Barcelona, España' },
+    text2: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra                                                                      08540 , Centelles, Barcelona, España' },
   { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png',
     text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.',
     text2: 'WDP Industrial Park / DN72 , Km. 3,2                              ​107025 Aricestii Rahtivani , Prahova , Romania' },
@@ -292,7 +291,7 @@ const IMAGE_WIDTH = 1.2;
 const IMAGE_HEIGHT = 0.8;
 const HOVER_SCALE = 1.18;
 const RADIUS = 2.8;
-const IMAGE_Y = 2.;
+const IMAGE_Y = 1.0;
 
 const loader = new THREE.TextureLoader();
 const cubes = []; // { mesh, index, prog }
