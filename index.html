@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VR Sales - Quest 3</title>
+<title>Roquet</title>
 <style>
   html, body {
     margin: 0; padding: 0;
@@ -114,26 +114,91 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(2, 5, 3);
 scene.add(dirLight);
 
+// ─── HUD 3D subjecte a la càmera (segueix la vista) ─────────────────
+const hud3D = new THREE.Group();
+camera.add(hud3D);
+hud3D.position.set(0, -0.45, -1.0);
+hud3D.rotation.set(0, 0, 0);
+
+// fons semi-transparent del HUD
+const hudBg = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.36, 0.12),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 })
+);
+hud3D.add(hudBg);
+
+// carreguem logo i el posem a l'esquerra superior del panel
+const texLoader = new THREE.TextureLoader();
+texLoader.load('roquet.png', (tex) => {
+  const w = 0.18;
+  const aspect = (tex.image && tex.image.width) ? (tex.image.width / tex.image.height) : 2;
+  const h = w / aspect;
+  const logo = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+  );
+  logo.position.set(-0.09, 0.02, 0.01);
+  hud3D.add(logo);
+});
+
+// dibuixem el controlador en un canvas i el convertim a textura
+const ctrlCanvas = document.createElement('canvas');
+ctrlCanvas.width = 600; ctrlCanvas.height = 200;
+const cctx = ctrlCanvas.getContext('2d');
+function drawControllerPreview(ctx) {
+  ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+  ctx.fillStyle = '#222'; ctx.strokeStyle = '#444'; ctx.lineWidth = 6;
+  const rx = 20, ry = 20, rw = ctx.canvas.width-40, rh = ctx.canvas.height-40;
+  // rounded rect
+  ctx.beginPath();
+  ctx.moveTo(20+rx,20);
+  ctx.arcTo(20+rw,20,20+rw,20+rh,ry);
+  ctx.arcTo(20+rw,20+rh,20,20+rh,ry);
+  ctx.arcTo(20,20+rh,20,20,ry);
+  ctx.arcTo(20,20,20+rw,20,ry);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  // A button (green)
+  ctx.fillStyle = '#0b8f0b'; ctx.beginPath(); ctx.arc(420, 100, 28, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('A', 420, 100);
+  // B button (red)
+  ctx.fillStyle = '#b00'; ctx.beginPath(); ctx.arc(500, 100, 28, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.fillText('B', 500, 100);
+
+  // labels
+  ctx.fillStyle = '#ccc'; ctx.font = '18px Arial'; ctx.fillText('A = Entrar', 460, 40);
+  ctx.fillText('B = Sortir', 460, 68);
+  ctx.fillStyle = '#888'; ctx.font = '14px Arial'; ctx.fillText('Meta Quest 3', 460, 150);
+}
+drawControllerPreview(cctx);
+const ctrlTex = new THREE.CanvasTexture(ctrlCanvas);
+const ctrlMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.22, 0.08),
+  new THREE.MeshBasicMaterial({ map: ctrlTex, transparent: true })
+);
+ctrlMesh.position.set(0.08, -0.02, 0.01);
+hud3D.add(ctrlMesh);
+
 // ─── TEMES ────────────────────────────────────────────────────────────
 const themes = [
   { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png',
     text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo',
-    text2: 'C/Antoni Figueras ,91 Bloc B - 08551 Tona , Barcelona , España' },
+    text2: 'C/Antoni Figueras ,91 Bloc B                                     08551 Tona , Barcelona , España' },
   { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png',
     text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.',
-    text2: 'C/Antoni Figueras , 91 Bloc B - 08551 Tona , Barcelona, España' },
+    text2: 'C/Antoni Figueras , 91 Bloc B                                     08551 Tona , Barcelona, España' },
   { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png',
     text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición',
-    text2: 'Ctra. Sant Hipòlit, 10 - ​08500 , Vic, Barcelona, España' },
+    text2: 'Ctra. Sant Hipòlit, 10                                            ​08500 , Vic, Barcelona, España' },
   { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png',
-    text: 'Ubicada en Centelles- 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
-    text2: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra - 08540 , Centelles, Barcelona, España' },
+    text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
+    text2: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra                  08540 , Centelles, Barcelona, España' },
   { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png',
     text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.',
-    text2: 'WDP Industrial Park / DN72 , Km. 3,2 - ​107025 Aricestii Rahtivani , Prahova , Romania' },
+    text2: 'WDP Industrial Park / DN72 , Km. 3,2                              ​107025 Aricestii Rahtivani , Prahova , Romania' },
   { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png',
     text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.',
-    text2: 'C/ Disseminats, S/N - 08510, Roda de Ter, Barcelona, España' },
+    text2: 'C/ Disseminats, S/N                                              08510, Roda de Ter, Barcelona, España' },
 ];
 
 // ─── TEXTURA DIFUMINADA DEL INTERIOR DE CADA SALA ─────────────────────
@@ -254,6 +319,7 @@ for (let i = 0; i < themes.length; i++) {
     ctx.closePath();
   }
   function drawWrappedTextCentered(ctx, text, centerX, maxWidth, lineHeight) {
+    ctx.textBaseline = 'middle';
     const words = text.split(' ');
     const lines = [];
     let line = '';
@@ -266,7 +332,8 @@ for (let i = 0; i < themes.length; i++) {
     }
     if (line) lines.push(line.trim());
     const totalH = lines.length * lineHeight;
-    let startY = (tcanvas.height - totalH) / 2 + lineHeight * 0.5;
+    const canvasH = ctx.canvas ? ctx.canvas.height : 0;
+    let startY = canvasH / 2 - totalH / 2 + lineHeight / 2;
     for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], centerX, startY + i * lineHeight);
   }
 
@@ -276,7 +343,7 @@ for (let i = 0; i < themes.length; i++) {
   tc.fillStyle = 'rgba(255,255,255,0.98)';
   tc.fill();
   tc.fillStyle = '#111111';
-  tc.font = '48px Arial';
+  tc.font = 'bold 56px Arial';
   tc.textAlign = 'center';
   tc.shadowColor = 'rgba(0,0,0,0.45)';
   tc.shadowBlur = 10;
@@ -284,7 +351,7 @@ for (let i = 0; i < themes.length; i++) {
   const ttex = new THREE.CanvasTexture(tcanvas);
   const tmat = new THREE.MeshBasicMaterial({ map: ttex, transparent: true, side: THREE.DoubleSide });
   const tmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.5), tmat);
-  tmesh.position.set(x, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, z);
+  tmesh.position.set(x, IMAGE_Y + IMAGE_HEIGHT/2 + 0.18, z);
   tmesh.lookAt(0, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, 0);
   tmat.opacity = 0.25;
   hubGroup.add(tmesh);
@@ -298,7 +365,7 @@ for (let i = 0; i < themes.length; i++) {
   bc.fillStyle = 'rgba(255,255,255,0.98)';
   bc.fill();
   bc.fillStyle = '#111111';
-  bc.font = '36px Arial';
+  bc.font = 'bold 40px Arial';
   bc.textAlign = 'center';
   bc.shadowColor = 'rgba(0,0,0,0.4)';
   bc.shadowBlur = 8;
@@ -306,7 +373,7 @@ for (let i = 0; i < themes.length; i++) {
   const btex = new THREE.CanvasTexture(bcanvas);
   const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
   const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.36), bmat);
-  bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, z);
+  bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, z);
   bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, 0);
   bmat.opacity = 0.25;
   hubGroup.add(bmesh);
@@ -330,10 +397,10 @@ for (let i = 0; i < themes.length; i++) {
     // ajustem etiquetes segons nova alçada
     tmesh.geometry.dispose();
     tmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), 0.5);
-    tmesh.position.set(x, IMAGE_Y + h/2 + 0.35, z);
+    tmesh.position.set(x, IMAGE_Y + h/2 + 0.18, z);
     bmesh.geometry.dispose();
     bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), 0.36);
-    bmesh.position.set(x, IMAGE_Y - h/2 - 0.25, z);
+    bmesh.position.set(x, IMAGE_Y - h/2 - 0.12, z);
   });
 
   cubes.push({ mesh, index: i, prog: 0 });
@@ -442,19 +509,7 @@ function buildRoom(themeIndex) {
   nctx.lineTo(0, rr); nctx.quadraticCurveTo(0, 0, rr, 0);
   nctx.closePath(); nctx.fill();
 
-  nctx.fillStyle = '#111111';
-  nctx.font = 'bold 120px Arial';
-  nctx.textAlign = 'center';
-  nctx.textBaseline = 'middle';
-  nctx.fillText(theme.label, ww / 2, hh / 2);
-
-  const nTex = new THREE.CanvasTexture(nc);
-  const sign = new THREE.Mesh(
-    new THREE.PlaneGeometry(3, 0.75),
-    new THREE.MeshBasicMaterial({ map: nTex, transparent: true, side: THREE.DoubleSide })
-  );
-  sign.position.set(0, H * 0.7, -R + 0.05);
-  roomGroup.add(sign);
+  // removed room title sign per request (no 'Ubicació X' text)
 
   // Labels dins la sala: Historia, Productes, Grup
   roomLabels.length = 0;
@@ -570,9 +625,12 @@ function openLabelWindow(ridx) {
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
   const geom = new THREE.PlaneGeometry(1.6, 0.8);
   const mesh = new THREE.Mesh(geom, mat);
-  mesh.position.copy(p);
-  mesh.position.z -= 0.01; // slight offset
-  mesh.lookAt(0, p.y, 0);
+  // position window slightly toward the camera so it appears in front of the label
+  camera.getWorldPosition(_cam);
+  const dir = _cam.clone().sub(p).normalize();
+  const frontPos = p.clone().add(dir.multiplyScalar(0.6));
+  mesh.position.copy(frontPos);
+  mesh.lookAt(_cam.x, frontPos.y, _cam.z);
   roomGroup.add(mesh);
   roomWindow = mesh;
 }
