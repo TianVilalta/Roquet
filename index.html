@@ -276,15 +276,17 @@ for (let i = 0; i < themes.length; i++) {
   tc.fillStyle = 'rgba(255,255,255,0.98)';
   tc.fill();
   tc.fillStyle = '#111111';
-  tc.font = '36px Arial';
+  tc.font = '48px Arial';
   tc.textAlign = 'center';
-  drawWrappedTextCentered(tc, theme.text, tcanvas.width/2, tcanvas.width - 160, 44);
+  tc.shadowColor = 'rgba(0,0,0,0.45)';
+  tc.shadowBlur = 10;
+  drawWrappedTextCentered(tc, theme.text, tcanvas.width/2, tcanvas.width - 160, 52);
   const ttex = new THREE.CanvasTexture(tcanvas);
   const tmat = new THREE.MeshBasicMaterial({ map: ttex, transparent: true, side: THREE.DoubleSide });
   const tmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.5), tmat);
   tmesh.position.set(x, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, z);
   tmesh.lookAt(0, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, 0);
-  tmat.opacity = 0;
+  tmat.opacity = 0.25;
   hubGroup.add(tmesh);
 
   // inferior
@@ -296,15 +298,17 @@ for (let i = 0; i < themes.length; i++) {
   bc.fillStyle = 'rgba(255,255,255,0.98)';
   bc.fill();
   bc.fillStyle = '#111111';
-  bc.font = '28px Arial';
+  bc.font = '36px Arial';
   bc.textAlign = 'center';
-  drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 160, 36);
+  bc.shadowColor = 'rgba(0,0,0,0.4)';
+  bc.shadowBlur = 8;
+  drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 160, 40);
   const btex = new THREE.CanvasTexture(bcanvas);
   const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
   const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.36), bmat);
   bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, z);
   bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, 0);
-  bmat.opacity = 0;
+  bmat.opacity = 0.25;
   hubGroup.add(bmesh);
 
   // Carrega imatge i ajusta aspect ratio (ample = meitat d'IMAGE_WIDTH)
@@ -592,8 +596,10 @@ function animate(time, frame) {
       const bp = labelBottomPlanes[i];
       tp.position.y = IMAGE_Y + IMAGE_HEIGHT/2 + 0.35 + 0.12 * c.prog;
       bp.position.y = IMAGE_Y - IMAGE_HEIGHT/2 - 0.25 - 0.06 * c.prog;
-      tp.material.opacity = c.prog;
-      bp.material.opacity = c.prog;
+      const base = 0.25; // visible even when not focused
+      const vis = base + (1 - base) * c.prog;
+      tp.material.opacity = vis;
+      bp.material.opacity = vis;
       tp.lookAt(_camPos2D.x, tp.position.y, _camPos2D.z);
       bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z);
     }
