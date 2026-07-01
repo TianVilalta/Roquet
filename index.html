@@ -292,7 +292,7 @@ const IMAGE_WIDTH = 1.2;
 const IMAGE_HEIGHT = 0.8;
 const HOVER_SCALE = 1.18;
 const RADIUS = 2.8;
-const IMAGE_Y = 1.3;
+const IMAGE_Y = 2.;
 
 const loader = new THREE.TextureLoader();
 const cubes = []; // { mesh, index, prog }
@@ -351,7 +351,7 @@ for (let i = 0; i < themes.length; i++) {
   const ttex = new THREE.CanvasTexture(tcanvas);
   const tmat = new THREE.MeshBasicMaterial({ map: ttex, transparent: true, side: THREE.DoubleSide });
   const tmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.5), tmat);
-  tmesh.position.set(x, IMAGE_Y + IMAGE_HEIGHT/2 + 0.18, z);
+  tmesh.position.set(x, IMAGE_Y + IMAGE_HEIGHT/2 + 0.34, z);
   tmesh.lookAt(0, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, 0);
   tmat.opacity = 0.25;
   hubGroup.add(tmesh);
@@ -373,7 +373,7 @@ for (let i = 0; i < themes.length; i++) {
   const btex = new THREE.CanvasTexture(bcanvas);
   const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
   const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.36), bmat);
-  bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, z);
+  bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.45, z);
   bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, 0);
   bmat.opacity = 0.25;
   hubGroup.add(bmesh);
@@ -397,10 +397,17 @@ for (let i = 0; i < themes.length; i++) {
     // ajustem etiquetes segons nova alçada
     tmesh.geometry.dispose();
     tmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), 0.5);
-    tmesh.position.set(x, IMAGE_Y + h/2 + 0.18, z);
     bmesh.geometry.dispose();
     bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), 0.36);
-    bmesh.position.set(x, IMAGE_Y - h/2 - 0.12, z);
+    // compute positions using image actual height and offset slightly toward camera
+    const imgPos = mesh.position.clone();
+    const tY = IMAGE_Y + h/2 + 0.34;
+    const bY = IMAGE_Y - h/2 - 0.45;
+    const camPos = new THREE.Vector3(); camera.getWorldPosition(camPos);
+    const dir = camPos.clone().sub(imgPos).normalize();
+    const gap = 1.0;
+    tmesh.position.set(imgPos.x + dir.x * gap, tY, imgPos.z + dir.z * gap);
+    bmesh.position.set(imgPos.x + dir.x * gap, bY, imgPos.z + dir.z * gap);
   });
 
   cubes.push({ mesh, index: i, prog: 0 });
@@ -734,11 +741,26 @@ function animate(time, frame) {
       const s = 1 + (HOVER_SCALE - 1) * c.prog;
       c.mesh.scale.setScalar(s);
 
-      // Labels: apareixen quan l'element està enfocat
+      // Labels: apareixen quan l'element està enfocat; usem l'altura real de la imatge
       const tp = labelTopPlanes[i];
       const bp = labelBottomPlanes[i];
-      tp.position.y = IMAGE_Y + IMAGE_HEIGHT/2 + 0.35 + 0.12 * c.prog;
-      bp.position.y = IMAGE_Y - IMAGE_HEIGHT/2 - 0.25 - 0.06 * c.prog;
+      const geoH = (c.mesh.geometry && c.mesh.geometry.parameters && c.mesh.geometry.parameters.height) ? c.mesh.geometry.parameters.height : IMAGE_HEIGHT;
+      // move top text slightly higher and bottom text slightly higher
+      const topBaseOffset = 0.34;
+      const bottomBaseOffset = 0.45;
+      const topY = IMAGE_Y + geoH / 2 + topBaseOffset;
+      const botY = IMAGE_Y - geoH / 2 - bottomBaseOffset;
+      tp.position.y = topY;
+      bp.position.y = botY;
+      // offset labels slightly toward the camera so they don't overlap the image
+      const camPos = new THREE.Vector3(); camera.getWorldPosition(camPos);
+      const imgPos = c.mesh.position.clone();
+      const dirToCam = camPos.clone().sub(imgPos).normalize();
+      const gap = 0.5; // increased forward offset
+      tp.position.x = imgPos.x + dirToCam.x * gap;
+      tp.position.z = imgPos.z + dirToCam.z * gap;
+      bp.position.x = imgPos.x + dirToCam.x * gap;
+      bp.position.z = imgPos.z + dirToCam.z * gap;
       const base = 0.25; // visible even when not focused
       const vis = base + (1 - base) * c.prog;
       tp.material.opacity = vis;
