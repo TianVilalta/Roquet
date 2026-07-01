@@ -240,50 +240,97 @@ for (let i = 0; i < themes.length; i++) {
   const z = -Math.cos(angle) * RADIUS;
   const theme = themes[i];
 
-  // Carrega imatge
-  const tex = loader.load(theme.img);
-  const mat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide });
-  const geo = new THREE.PlaneGeometry(IMAGE_WIDTH, IMAGE_HEIGHT);
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x, IMAGE_Y, z);
-  mesh.lookAt(0, IMAGE_Y, 0);
-  hubGroup.add(mesh);
-
-  // Etiqueta superior (text)
+  // Etiquetes (sup/inf) amb requadres arrodonits i text centrat
   const tcanvas = document.createElement('canvas');
-  tcanvas.width = 1024; tcanvas.height = 256;
+  tcanvas.width = 1024; tcanvas.height = 320;
   const tc = tcanvas.getContext('2d');
+  function roundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function drawWrappedTextCentered(ctx, text, centerX, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+        lines.push(line.trim());
+        line = words[n] + ' ';
+      } else line = testLine;
+    }
+    if (line) lines.push(line.trim());
+    const totalH = lines.length * lineHeight;
+    let startY = (tcanvas.height - totalH) / 2 + lineHeight * 0.5;
+    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], centerX, startY + i * lineHeight);
+  }
+
+  // superior
+  tc.clearRect(0,0,tcanvas.width,tcanvas.height);
+  roundedRect(tc, 8, 8, tcanvas.width - 16, tcanvas.height - 16, 28);
   tc.fillStyle = 'rgba(255,255,255,0.98)';
-  tc.fillRect(0, 0, tcanvas.width, tcanvas.height);
+  tc.fill();
   tc.fillStyle = '#111111';
-  tc.font = '28px Arial';
+  tc.font = '36px Arial';
   tc.textAlign = 'center';
-  wrapText(tc, theme.text, tcanvas.width/2, 40, tcanvas.width-40, 34);
+  drawWrappedTextCentered(tc, theme.text, tcanvas.width/2, tcanvas.width - 160, 44);
   const ttex = new THREE.CanvasTexture(tcanvas);
   const tmat = new THREE.MeshBasicMaterial({ map: ttex, transparent: true, side: THREE.DoubleSide });
-  const tmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), tmat);
+  const tmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.5), tmat);
   tmesh.position.set(x, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, z);
   tmesh.lookAt(0, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, 0);
   tmat.opacity = 0;
   hubGroup.add(tmesh);
 
-  // Etiqueta inferior (text2)
+  // inferior
   const bcanvas = document.createElement('canvas');
-  bcanvas.width = 1024; bcanvas.height = 160;
+  bcanvas.width = 1024; bcanvas.height = 220;
   const bc = bcanvas.getContext('2d');
+  bc.clearRect(0,0,bcanvas.width,bcanvas.height);
+  roundedRect(bc, 8, 8, bcanvas.width - 16, bcanvas.height - 16, 20);
   bc.fillStyle = 'rgba(255,255,255,0.98)';
-  bc.fillRect(0, 0, bcanvas.width, bcanvas.height);
+  bc.fill();
   bc.fillStyle = '#111111';
-  bc.font = '24px Arial';
+  bc.font = '28px Arial';
   bc.textAlign = 'center';
-  wrapText(bc, theme.text2, bcanvas.width/2, 34, bcanvas.width-40, 28);
+  drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 160, 36);
   const btex = new THREE.CanvasTexture(bcanvas);
   const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
-  const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), bmat);
+  const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.36), bmat);
   bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, z);
   bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, 0);
   bmat.opacity = 0;
   hubGroup.add(bmesh);
+
+  // Carrega imatge i ajusta aspect ratio (ample = meitat d'IMAGE_WIDTH)
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }));
+  mesh.position.set(x, IMAGE_Y, z);
+  mesh.lookAt(0, IMAGE_Y, 0);
+  hubGroup.add(mesh);
+  loader.load(theme.img, (texLoaded) => {
+    mesh.material.map = texLoaded;
+    mesh.material.needsUpdate = true;
+    const iw = texLoaded.image?.naturalWidth || texLoaded.image?.width || 1024;
+    const ih = texLoaded.image?.naturalHeight || texLoaded.image?.height || 1024;
+    const w = IMAGE_WIDTH * 0.5; // meitat d'amplada
+    const h = w * (ih / iw);
+    mesh.geometry.dispose();
+    mesh.geometry = new THREE.PlaneGeometry(w, h);
+    mesh.position.set(x, IMAGE_Y, z);
+    mesh.lookAt(0, IMAGE_Y, 0);
+    // ajustem etiquetes segons nova alçada
+    tmesh.geometry.dispose();
+    tmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), 0.5);
+    tmesh.position.set(x, IMAGE_Y + h/2 + 0.35, z);
+    bmesh.geometry.dispose();
+    bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), 0.36);
+    bmesh.position.set(x, IMAGE_Y - h/2 - 0.25, z);
+  });
 
   cubes.push({ mesh, index: i, prog: 0 });
   labelTopPlanes.push(tmesh);
