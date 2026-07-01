@@ -455,6 +455,37 @@ function buildRoom(themeIndex) {
   );
   sign.position.set(0, H * 0.7, -R + 0.05);
   roomGroup.add(sign);
+
+  // Labels dins la sala: Historia, Productes, Grup
+  roomLabels.length = 0;
+  const labels = ['Historia', 'Productes', 'Grup'];
+  const RL_RADIUS = 2.0;
+  const RL_Y = 1.6;
+  for (let i = 0; i < labels.length; i++) {
+    const ang = (i / labels.length) * Math.PI * 2;
+    const lx = Math.sin(ang) * RL_RADIUS;
+    const lz = -Math.cos(ang) * RL_RADIUS;
+
+    // canvas with rounded rect
+    const lc = document.createElement('canvas'); lc.width = 512; lc.height = 120;
+    const lctx = lc.getContext('2d');
+    function rrect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+    lctx.clearRect(0,0,lc.width,lc.height);
+    rrect(lctx,6,6,lc.width-12,lc.height-12,18);
+    lctx.fillStyle = 'rgba(255,255,255,0.98)'; lctx.fill();
+    lctx.fillStyle = '#111111'; lctx.font = 'bold 56px Arial'; lctx.textAlign = 'center';
+    lctx.fillText(labels[i], lc.width/2, lc.height/2 + 8);
+
+    const ltex = new THREE.CanvasTexture(lc);
+    const lmat = new THREE.MeshBasicMaterial({ map: ltex, transparent: true, side: THREE.DoubleSide });
+    const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), lmat);
+    lmesh.position.set(lx, RL_Y, lz);
+    lmesh.lookAt(0, RL_Y, 0);
+    lmat.opacity = 0.4; // base visibility
+    roomGroup.add(lmesh);
+
+    roomLabels.push({ mesh: lmesh, index: i, prog: 0, text: labels[i] });
+  }
 }
 
 // ─── BOTÓ VR ──────────────────────────────────────────────────────────
@@ -491,6 +522,8 @@ if (navigator.xr) {
 // ─── ESTAT ────────────────────────────────────────────────────────────
 let state = 'hub';  // 'hub' | 'room'
 const buttonStates = {};
+const roomLabels = []; // labels inside a room
+let roomWindow = null;  // currently opened floating window in room
 
 // ─── DETECCIÓ DE QUIN CUB ES MIRA ─────────────────────────────────────
 const _fwd = new THREE.Vector3();
@@ -507,6 +540,41 @@ function getLookedCube() {
     if (d > bestDot) { bestDot = d; best = i; }
   }
   return best;
+}
+
+function getLookedRoomLabel() {
+  camera.getWorldDirection(_fwd);
+  camera.getWorldPosition(_cam);
+  let best = -1, bestDot = 0.7;
+  for (let i = 0; i < roomLabels.length; i++) {
+    _to.copy(roomLabels[i].mesh.position).sub(_cam).normalize();
+    const d = _fwd.dot(_to);
+    if (d > bestDot) { bestDot = d; best = i; }
+  }
+  return best;
+}
+
+function openLabelWindow(ridx) {
+  // remove existing
+  if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null; }
+  const info = roomLabels[ridx];
+  const p = info.mesh.position.clone();
+  // create canvas with same style
+  const cw = 1024, ch = 512;
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const ctx = c.getContext('2d');
+  function rrect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  ctx.clearRect(0,0,cw,ch); rrect(ctx,12,12,cw-24,ch-24,28); ctx.fillStyle='rgba(255,255,255,0.98)'; ctx.fill();
+  ctx.fillStyle = '#111111'; ctx.font = 'bold 64px Arial'; ctx.textAlign='center'; ctx.fillText(info.text, cw/2, ch/2);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+  const geom = new THREE.PlaneGeometry(1.6, 0.8);
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.copy(p);
+  mesh.position.z -= 0.01; // slight offset
+  mesh.lookAt(0, p.y, 0);
+  roomGroup.add(mesh);
+  roomWindow = mesh;
 }
 
 // ─── ENTRADA / SORTIDA DE SALA ─────────────────────────────────────────
@@ -562,10 +630,27 @@ function handleInput(frame) {
       if (state === 'hub') {
         const idx = getLookedCube();
         if (idx !== -1) enterRoom(idx);
+      } else if (state === 'room') {
+        // in-room: check looked room label
+        const ridx = getLookedRoomLabel();
+        if (ridx !== -1) {
+          // open floating window at label
+          openLabelWindow(ridx);
+        }
       }
     }
     if (bPressed && !buttonStates.b) {
-      if (state === 'room') exitRoom();
+      if (state === 'room') {
+        // if a floating window is open, close it first
+        if (roomWindow) {
+          roomGroup.remove(roomWindow);
+          roomWindow.geometry?.dispose();
+          (roomWindow.material && (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material])).forEach(m=>m.dispose());
+          roomWindow = null;
+        } else {
+          exitRoom();
+        }
+      }
     }
     buttonStates.a = aPressed;
     buttonStates.b = bPressed;
@@ -602,6 +687,22 @@ function animate(time, frame) {
       bp.material.opacity = vis;
       tp.lookAt(_camPos2D.x, tp.position.y, _camPos2D.z);
       bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z);
+    }
+  }
+  else if (state === 'room') {
+    // animate room labels
+    camera.getWorldPosition(_camPos2D);
+    const looked = getLookedRoomLabel();
+    for (let i = 0; i < roomLabels.length; i++) {
+      const r = roomLabels[i];
+      const target = (i === looked) ? 1 : 0;
+      r.prog += (target - r.prog) * 0.12;
+      const s = 1 + 0.25 * r.prog;
+      r.mesh.scale.setScalar(s);
+      const base = 0.4;
+      const vis = base + (1 - base) * r.prog;
+      r.mesh.material.opacity = vis;
+      r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
     }
   }
 
