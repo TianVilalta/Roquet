@@ -192,7 +192,7 @@ const themes = [
     text2: 'Ctra. Sant Hipòlit, 10                                            ​08500 , Vic, Barcelona, España' },
   { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png',
     text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
-    text2: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra                  08540 , Centelles, Barcelona, España' },
+    text2: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra                                                   08540 , Centelles, Barcelona, España' },
   { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png',
     text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.',
     text2: 'WDP Industrial Park / DN72 , Km. 3,2                              ​107025 Aricestii Rahtivani , Prahova , Romania' },
@@ -403,11 +403,8 @@ for (let i = 0; i < themes.length; i++) {
     const imgPos = mesh.position.clone();
     const tY = IMAGE_Y + h/2 + 0.34;
     const bY = IMAGE_Y - h/2 - 0.45;
-    const camPos = new THREE.Vector3(); camera.getWorldPosition(camPos);
-    const dir = camPos.clone().sub(imgPos).normalize();
-    const gap = 1.0;
-    tmesh.position.set(imgPos.x + dir.x * gap, tY, imgPos.z + dir.z * gap);
-    bmesh.position.set(imgPos.x + dir.x * gap, bY, imgPos.z + dir.z * gap);
+    tmesh.position.set(imgPos.x, tY, imgPos.z);
+    bmesh.position.set(imgPos.x, bY, imgPos.z);
   });
 
   cubes.push({ mesh, index: i, prog: 0 });
@@ -740,6 +737,8 @@ function animate(time, frame) {
       c.prog += (target - c.prog) * 0.12;
       const s = 1 + (HOVER_SCALE - 1) * c.prog;
       c.mesh.scale.setScalar(s);
+      const camPos3 = new THREE.Vector3(); camera.getWorldPosition(camPos3);
+      c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
 
       // Labels: apareixen quan l'element està enfocat; usem l'altura real de la imatge
       const tp = labelTopPlanes[i];
@@ -752,21 +751,20 @@ function animate(time, frame) {
       const botY = IMAGE_Y - geoH / 2 - bottomBaseOffset;
       tp.position.y = topY;
       bp.position.y = botY;
-      // offset labels slightly toward the camera so they don't overlap the image
-      const camPos = new THREE.Vector3(); camera.getWorldPosition(camPos);
+      // keep texts at same distance as the image
       const imgPos = c.mesh.position.clone();
-      const dirToCam = camPos.clone().sub(imgPos).normalize();
-      const gap = 0.5; // increased forward offset
-      tp.position.x = imgPos.x + dirToCam.x * gap;
-      tp.position.z = imgPos.z + dirToCam.z * gap;
-      bp.position.x = imgPos.x + dirToCam.x * gap;
-      bp.position.z = imgPos.z + dirToCam.z * gap;
+      tp.position.x = imgPos.x;
+      tp.position.z = imgPos.z;
+      bp.position.x = imgPos.x;
+      bp.position.z = imgPos.z;
       const base = 0.25; // visible even when not focused
       const vis = base + (1 - base) * c.prog;
       tp.material.opacity = vis;
       bp.material.opacity = vis;
       tp.lookAt(_camPos2D.x, tp.position.y, _camPos2D.z);
       bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z);
+      tp.rotateX(-0.12);
+      bp.rotateX(-0.12);
     }
   }
   else if (state === 'room') {
