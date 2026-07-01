@@ -1,25 +1,499 @@
 <!DOCTYPE html>
-<html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity WebGL Player | Roquet</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
-    <script src="TemplateData/UnityProgress.js"></script>
-    <script src="Build/UnityLoader.js"></script>
-    <script>
-      var unityInstance = UnityLoader.instantiate("unityContainer", "Build/Build.json", {onProgress: UnityProgress});
-    </script>
-  </head>
-  <body>
-    <div class="webgl-content">
-      <div id="unityContainer" style="width: 960px; height: 600px"></div>
-      <div class="footer">
-        <div class="webgl-logo"></div>
-        <div class="fullscreen" onclick="unityInstance.SetFullscreen(1)"></div>
-        <div class="title">Roquet</div>
-      </div>
-    </div>
-  </body>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VR Sales - Quest 3</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, sans-serif;
+    color: white;
+  }
+  #overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    text-align: center;
+    padding: 20px;
+    pointer-events: none;
+  }
+  #vrButton {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 14px 28px;
+    font-size: 18px;
+    background: #2266ff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  #vrButton:disabled {
+    background: #555;
+    cursor: not-allowed;
+  }
+  #status {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #aaa;
+  }
+  #controllerInfo {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 12px;
+    border-radius: 6px;
+    pointer-events: none;
+    white-space: pre;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+  <h2>Sales VR — Quest 3</h2>
+  <div id="status">Carregant...</div>
+</div>
+<div id="controllerInfo">Mandos: esperant sessió VR...</div>
+<button id="vrButton" disabled>Comprovant suport VR...</button>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script>
+  window.addEventListener('error', (e) => {
+    const s = document.getElementById('status');
+    if (s) { s.textContent = "Error: " + (e.message || e); s.style.color = "#ff6666"; }
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const s = document.getElementById('status');
+    if (s) { s.textContent = "Error carregant: " + (e.reason && e.reason.message ? e.reason.message : e.reason); s.style.color = "#ff6666"; }
+  });
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+const statusEl = document.getElementById('status');
+const vrButton = document.getElementById('vrButton');
+const controllerInfoEl = document.getElementById('controllerInfo');
+statusEl.textContent = "Three.js carregat. Comprovant suport VR...";
+
+if (!window.isSecureContext) {
+  statusEl.textContent = "⚠️ Aquesta pàgina NO s'està servint per HTTPS. WebXR requereix un context segur.";
+  statusEl.style.color = "#ff6666";
+}
+
+// --- Escena base ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202030);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x222222, 1.2);
+scene.add(hemiLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(2, 4, 2);
+scene.add(dirLight);
+
+// --- Grup "HUB" (sala inicial amb els 4 cubs) ---
+const hubGroup = new THREE.Group();
+scene.add(hubGroup);
+
+const hubFloorGeo = new THREE.PlaneGeometry(20, 20);
+const hubFloorMat = new THREE.MeshStandardMaterial({ color: 0x444455 });
+const hubFloor = new THREE.Mesh(hubFloorGeo, hubFloorMat);
+hubFloor.rotation.x = -Math.PI / 2;
+hubGroup.add(hubFloor);
+
+const hubGrid = new THREE.GridHelper(20, 20, 0x888888, 0x333344);
+hubGroup.add(hubGrid);
+
+// --- Definició de les 4 sales temàtiques ---
+const themes = [
+  { name: 'Productes',  color: 0xff3333, accent: 0xffaaaa, floorColor: 0xcc2222, label: 'Productes' },
+  { name: 'Historia',   color: 0x33cc66, accent: 0xaaffaa, floorColor: 0x229944, label: 'Historia' },
+  { name: 'Grup',       color: 0x3399ff, accent: 0xaaddff, floorColor: 0x2266cc, label: 'Grup' },
+  { name: 'Aplicacions',color: 0xffcc33, accent: 0xffeeaa, floorColor: 0xcc9922, label: 'Aplicacions' }
+];
+
+const CUBE_BASE_SIZE = 0.3;
+const CUBE_HOVER_SIZE = 0.42;
+const CUBE_RADIUS = 2.2;
+const CUBE_HEIGHT = 1.2;
+
+const cubes = [];        // { mesh, theme, index, lookProgress }
+const textMeshes = [];   // { mesh, texture, canvas }
+
+function makeLabelCanvas(text, bgHex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#' + new THREE.Color(bgHex).getHexString();
+  ctx.globalAlpha = 0.85;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 70px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+  return canvas;
+}
+
+for (let i = 0; i < 4; i++) {
+  const angle = (i / 4) * Math.PI * 2;
+  const x = Math.sin(angle) * CUBE_RADIUS;
+  const z = -Math.cos(angle) * CUBE_RADIUS;
+
+  const geo = new THREE.BoxGeometry(CUBE_BASE_SIZE, CUBE_BASE_SIZE, CUBE_BASE_SIZE);
+  const mat = new THREE.MeshStandardMaterial({ color: themes[i].color });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, CUBE_HEIGHT, z);
+  hubGroup.add(mesh);
+
+  const cubeData = { mesh, theme: themes[i], index: i, lookProgress: 0, baseScale: 1 };
+  cubes.push(cubeData);
+
+  // Text que "surt" de dins del cub cap amunt
+  const canvas = makeLabelCanvas(themes[i].label, themes[i].color);
+  const texture = new THREE.CanvasTexture(canvas);
+  const textGeo = new THREE.PlaneGeometry(0.6, 0.3);
+  const textMat = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide
+  });
+  const textMesh = new THREE.Mesh(textGeo, textMat);
+  textMesh.position.set(x, CUBE_HEIGHT, z);
+  hubGroup.add(textMesh);
+
+  textMeshes.push({ mesh: textMesh, cubeIndex: i });
+}
+
+// --- Sales (es generen sota demanda) ---
+const roomsGroup = new THREE.Group();
+roomsGroup.visible = false;
+scene.add(roomsGroup);
+
+function clearGroup(group) {
+  while (group.children.length > 0) {
+    const child = group.children[0];
+    group.remove(child);
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+      else child.material.dispose();
+    }
+  }
+}
+
+function buildRoom(themeIndex) {
+  clearGroup(roomsGroup);
+  const theme = themes[themeIndex];
+  const ROOM_SIZE = 10;
+  const ROOM_HEIGHT = 5;
+
+  // Terra
+  const floorMat = new THREE.MeshStandardMaterial({ color: theme.color });
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_SIZE, ROOM_SIZE), floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  roomsGroup.add(floor);
+
+  // Sostre
+  const ceilMat = new THREE.MeshStandardMaterial({ color: 0x111111, side: THREE.DoubleSide });
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_SIZE, ROOM_SIZE), ceilMat);
+  ceil.rotation.x = Math.PI / 2;
+  ceil.position.y = ROOM_HEIGHT;
+  roomsGroup.add(ceil);
+
+  // Parets (vistes des de dins -> BackSide)
+  const wallMat = new THREE.MeshStandardMaterial({ color: theme.accent, side: THREE.BackSide });
+  const wallGeo = new THREE.BoxGeometry(ROOM_SIZE, ROOM_HEIGHT, ROOM_SIZE);
+  const walls = new THREE.Mesh(wallGeo, wallMat);
+  walls.position.y = ROOM_HEIGHT / 2;
+  roomsGroup.add(walls);
+
+  // Llum ambient de la sala (color del tema)
+  const roomLight = new THREE.PointLight(theme.color, 1.2, 15);
+  roomLight.position.set(0, ROOM_HEIGHT - 0.5, 0);
+  roomsGroup.add(roomLight);
+
+  // Decoració diferent per tema
+  const decoMat = new THREE.MeshStandardMaterial({ color: theme.color });
+  if (themeIndex === 0) {
+    // FOC: columnes + boles "brasa" flotants
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const px = Math.sin(a) * 3.5;
+      const pz = Math.cos(a) * 3.5;
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3, 12), decoMat);
+      col.position.set(px, 1.5, pz);
+      roomsGroup.add(col);
+      const ember = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff3300, emissiveIntensity: 1 }));
+      ember.position.set(px, 3.2, pz);
+      roomsGroup.add(ember);
+    }
+  } else if (themeIndex === 1) {
+    // BOSC: "arbres" fets amb cons + cilindres
+    for (let i = 0; i < 8; i++) {
+      const px = (Math.random() - 0.5) * 8;
+      const pz = (Math.random() - 0.5) * 8;
+      if (Math.abs(px) < 1 && Math.abs(pz) < 1) continue;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 1.2, 8),
+        new THREE.MeshStandardMaterial({ color: 0x553311 }));
+      trunk.position.set(px, 0.6, pz);
+      roomsGroup.add(trunk);
+      const leaves = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 10), decoMat);
+      leaves.position.set(px, 1.8, pz);
+      roomsGroup.add(leaves);
+    }
+  } else if (themeIndex === 2) {
+    // GEL: blocs de "gel" (cubs translúcids) i cristalls
+    for (let i = 0; i < 10; i++) {
+      const px = (Math.random() - 0.5) * 8;
+      const pz = (Math.random() - 0.5) * 8;
+      const s = 0.4 + Math.random() * 0.6;
+      const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0),
+        new THREE.MeshStandardMaterial({ color: theme.color, transparent: true, opacity: 0.7, roughness: 0.1 }));
+      ice.position.set(px, s, pz);
+      roomsGroup.add(ice);
+    }
+  } else {
+    // SORRA: dunes (esferes aixafades) + "cactus"
+    for (let i = 0; i < 6; i++) {
+      const px = (Math.random() - 0.5) * 7;
+      const pz = (Math.random() - 0.5) * 7;
+      const dune = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), decoMat);
+      dune.scale.set(1.5, 0.3, 1.5);
+      dune.position.set(px, 0.1, pz);
+      roomsGroup.add(dune);
+    }
+    for (let i = 0; i < 4; i++) {
+      const px = (Math.random() - 0.5) * 6;
+      const pz = (Math.random() - 0.5) * 6;
+      const cactus = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1.4, 8),
+        new THREE.MeshStandardMaterial({ color: 0x2e8b57 }));
+      cactus.position.set(px, 0.7, pz);
+      roomsGroup.add(cactus);
+    }
+  }
+
+  // Text central amb el nom de la sala
+  const labelCanvas = makeLabelCanvas(theme.name, theme.color);
+  const labelTex = new THREE.CanvasTexture(labelCanvas);
+  const labelMat = new THREE.MeshBasicMaterial({ map: labelTex, transparent: true, side: THREE.DoubleSide });
+  const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 1), labelMat);
+  labelMesh.position.set(0, 2.5, -4.9);
+  roomsGroup.add(labelMesh);
+}
+
+// --- Estat general ---
+let state = 'hub'; // 'hub' o 'room'
+let activeRoomIndex = -1;
+
+// --- Botó VR ---
+if (navigator.xr) {
+  let resolved = false;
+  setTimeout(() => {
+    if (!resolved) {
+      statusEl.textContent = "La comprovació de suport VR està trigant massa. Prova de recarregar.";
+      statusEl.style.color = "#ffaa00";
+    }
+  }, 5000);
+
+  navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+    resolved = true;
+    if (supported) {
+      vrButton.disabled = false;
+      vrButton.textContent = "Entrar en VR";
+      statusEl.textContent = "Llest. Posa't les ulleres i prem el botó.";
+      const xrBtn = VRButton.createButton(renderer);
+      vrButton.replaceWith(xrBtn);
+      xrBtn.id = "vrButton";
+    } else {
+      vrButton.textContent = "VR immersiu no suportat en aquest navegador/dispositiu";
+      statusEl.textContent = "Obre aquesta pàgina amb el navegador del Quest 3 per HTTPS.";
+    }
+  }).catch((err) => {
+    resolved = true;
+    vrButton.textContent = "Error comprovant suport VR";
+    statusEl.textContent = "Error: " + err.message;
+    statusEl.style.color = "#ff6666";
+  });
+} else {
+  vrButton.textContent = "WebXR no disponible";
+  statusEl.textContent = "Aquest navegador no suporta WebXR. Fes servir el Meta Quest Browser.";
+}
+
+// --- Detecció de quin cub es mira (només té sentit a 'hub') ---
+const camForward = new THREE.Vector3();
+const camPos = new THREE.Vector3();
+const toCube = new THREE.Vector3();
+
+function getLookedCubeIndex() {
+  camera.getWorldDirection(camForward);
+  camera.getWorldPosition(camPos);
+
+  let bestIndex = -1;
+  let bestDot = 0.75; // llindar: cal mirar prou de cara
+  for (let i = 0; i < cubes.length; i++) {
+    toCube.copy(cubes[i].mesh.position).sub(camPos).normalize();
+    const dot = camForward.dot(toCube);
+    if (dot > bestDot) {
+      bestDot = dot;
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
+}
+
+// --- Entrar / sortir de sala ---
+function enterRoom(index) {
+  state = 'room';
+  activeRoomIndex = index;
+  buildRoom(index);
+  hubGroup.visible = false;
+  roomsGroup.visible = true;
+}
+
+function exitRoom() {
+  state = 'hub';
+  activeRoomIndex = -1;
+  clearGroup(roomsGroup);
+  roomsGroup.visible = false;
+  hubGroup.visible = true;
+}
+
+// --- Botons del mando dret ---
+const buttonStates = {};
+
+function handleControllerInput() {
+  const session = renderer.xr.getSession();
+  if (!session) return;
+
+  for (const source of session.inputSources) {
+    if (!source.gamepad || source.handedness !== 'right') continue;
+
+    const gp = source.gamepad;
+    const aPressed = gp.buttons[4] && gp.buttons[4].pressed;
+    const bPressed = gp.buttons[5] && gp.buttons[5].pressed;
+
+    if (aPressed && !buttonStates.a) {
+      if (state === 'hub') {
+        const looked = getLookedCubeIndex();
+        if (looked !== -1) enterRoom(looked);
+      }
+    }
+    if (bPressed && !buttonStates.b) {
+      if (state === 'room') exitRoom();
+    }
+    buttonStates.a = aPressed;
+    buttonStates.b = bPressed;
+  }
+}
+
+// --- Posició dels mandos a pantalla ---
+function updateControllerInfo(frame) {
+  const session = renderer.xr.getSession();
+  if (!session || !frame) {
+    controllerInfoEl.textContent = "Mandos: esperant sessió VR...";
+    return;
+  }
+  const refSpace = renderer.xr.getReferenceSpace();
+  if (!refSpace) return;
+
+  let text = "Posició dels mandos:\n";
+  let found = false;
+
+  for (const source of session.inputSources) {
+    if (!source.gamepad) continue;
+    const space = source.gripSpace || source.targetRaySpace;
+    if (!space) continue;
+    const pose = frame.getPose(space, refSpace);
+    if (!pose) continue;
+    found = true;
+    const p = pose.transform.position;
+    const hand = source.handedness === 'right' ? 'Dret ' : (source.handedness === 'left' ? 'Esquerre' : 'Desconegut');
+    text += `${hand}: x=${p.x.toFixed(2)} y=${p.y.toFixed(2)} z=${p.z.toFixed(2)}\n`;
+  }
+
+  controllerInfoEl.textContent = found ? text : "Mandos: cap detectat";
+}
+
+// --- Animació ---
+const ROTATION_SPEED_Y = 0.01;
+const ROTATION_SPEED_X = 0.005;
+
+function updateHub(dt) {
+  const lookedIndex = state === 'hub' ? getLookedCubeIndex() : -1;
+
+  for (let i = 0; i < cubes.length; i++) {
+    const c = cubes[i];
+    c.mesh.rotation.y += ROTATION_SPEED_Y;
+    c.mesh.rotation.x += ROTATION_SPEED_X;
+
+    const isLooked = (i === lookedIndex);
+    // Progrés suau cap a 1 (mirat) o 0 (no mirat)
+    const targetProgress = isLooked ? 1 : 0;
+    c.lookProgress += (targetProgress - c.lookProgress) * 0.12;
+
+    const scale = CUBE_BASE_SIZE + (CUBE_HOVER_SIZE - CUBE_BASE_SIZE) * c.lookProgress;
+    const s = scale / CUBE_BASE_SIZE;
+    c.mesh.scale.set(s, s, s);
+
+    // Text: surt de dins del cub (y = centre) cap amunt
+    const td = textMeshes[i];
+    const startY = CUBE_HEIGHT;
+    const endY = CUBE_HEIGHT + 0.5;
+    td.mesh.position.y = startY + (endY - startY) * c.lookProgress;
+    td.mesh.material.opacity = c.lookProgress;
+    td.mesh.lookAt(camPos);
+  }
+}
+
+function animate(time, frame) {
+  if (state === 'hub') {
+    updateHub();
+  }
+  handleControllerInput();
+  updateControllerInfo(frame);
+  renderer.render(scene, camera);
+}
+renderer.setAnimationLoop(animate);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
 </html>
