@@ -6,10 +6,8 @@
 <title>VR Sales - Quest 3</title>
 <style>
   html, body {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
     overflow: hidden;
     background: #111;
     font-family: Arial, sans-serif;
@@ -22,38 +20,15 @@
     padding: 20px;
     pointer-events: none;
   }
-  #vrButton {
-    position: absolute;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 14px 28px;
-    font-size: 18px;
-    background: #2266ff;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    pointer-events: auto;
-  }
-  #vrButton:disabled {
-    background: #555;
-    cursor: not-allowed;
-  }
-  #status {
-    margin-top: 10px;
-    font-size: 14px;
-    color: #aaa;
-  }
+  #status { margin-top: 10px; font-size: 14px; color: #aaa; }
   #controllerInfo {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 10px; left: 10px;
     font-size: 12px;
-    line-height: 1.4;
-    background: rgba(0,0,0,0.5);
-    padding: 8px 12px;
-    border-radius: 6px;
+    line-height: 1.6;
+    background: rgba(0,0,0,0.55);
+    padding: 8px 14px;
+    border-radius: 8px;
     pointer-events: none;
     white-space: pre;
   }
@@ -61,13 +36,11 @@
 </style>
 </head>
 <body>
-
 <div id="overlay">
   <h2>Sales VR — Quest 3</h2>
   <div id="status">Carregant...</div>
 </div>
 <div id="controllerInfo">Mandos: esperant sessió VR...</div>
-<button id="vrButton" disabled>Comprovant suport VR...</button>
 
 <script type="importmap">
 {
@@ -78,338 +51,411 @@
 }
 </script>
 <script>
-  window.addEventListener('error', (e) => {
+  window.addEventListener('error', e => {
     const s = document.getElementById('status');
-    if (s) { s.textContent = "Error: " + (e.message || e); s.style.color = "#ff6666"; }
+    if (s) { s.textContent = 'Error: ' + (e.message || e); s.style.color = '#f66'; }
   });
-  window.addEventListener('unhandledrejection', (e) => {
+  window.addEventListener('unhandledrejection', e => {
     const s = document.getElementById('status');
-    if (s) { s.textContent = "Error carregant: " + (e.reason && e.reason.message ? e.reason.message : e.reason); s.style.color = "#ff6666"; }
+    if (s) { s.textContent = 'Error: ' + (e.reason?.message ?? e.reason); s.style.color = '#f66'; }
   });
 </script>
+
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-const statusEl = document.getElementById('status');
-const vrButton = document.getElementById('vrButton');
-const controllerInfoEl = document.getElementById('controllerInfo');
-statusEl.textContent = "Three.js carregat. Comprovant suport VR...";
-
-if (!window.isSecureContext) {
-  statusEl.textContent = "⚠️ Aquesta pàgina NO s'està servint per HTTPS. WebXR requereix un context segur.";
-  statusEl.style.color = "#ff6666";
-}
-
-// --- Escena base ---
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x202030);
-
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
-
+// ─── RENDER ────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x222222, 1.2);
-scene.add(hemiLight);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+
+// Llum global
+scene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 1.2));
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight.position.set(2, 4, 2);
+dirLight.position.set(2, 5, 3);
 scene.add(dirLight);
 
-// --- Grup "HUB" (sala inicial amb els 4 cubs) ---
-const hubGroup = new THREE.Group();
-scene.add(hubGroup);
-
-const hubFloorGeo = new THREE.PlaneGeometry(20, 20);
-const hubFloorMat = new THREE.MeshStandardMaterial({ color: 0x444455 });
-const hubFloor = new THREE.Mesh(hubFloorGeo, hubFloorMat);
-hubFloor.rotation.x = -Math.PI / 2;
-hubGroup.add(hubFloor);
-
-const hubGrid = new THREE.GridHelper(20, 20, 0x888888, 0x333344);
-hubGroup.add(hubGrid);
-
-// --- Definició de les 4 sales temàtiques ---
+// ─── TEMES ────────────────────────────────────────────────────────────
 const themes = [
-  { name: 'Productes',  color: 0xff3333, accent: 0xffaaaa, floorColor: 0xcc2222, label: 'Productes' },
-  { name: 'Historia',   color: 0x33cc66, accent: 0xaaffaa, floorColor: 0x229944, label: 'Historia' },
-  { name: 'Grup',       color: 0x3399ff, accent: 0xaaddff, floorColor: 0x2266cc, label: 'Grup' },
-  { name: 'Aplicacions',color: 0xffcc33, accent: 0xffeeaa, floorColor: 0xcc9922, label: 'Aplicacions' }
+  { label: 'Productes',   color: 0xe63946, wallColor: 0x888888 },
+  { label: 'Historia',    color: 0x2dc653, wallColor: 0x888888 },
+  { label: 'Grup',        color: 0x4895ef, wallColor: 0x888888 },
+  { label: 'Aplicacions', color: 0xf4a261, wallColor: 0x888888 },
 ];
 
-const CUBE_BASE_SIZE = 0.3;
-const CUBE_HOVER_SIZE = 0.42;
-const CUBE_RADIUS = 2.2;
-const CUBE_HEIGHT = 1.2;
+// ─── TEXTURA DIFUMINADA DEL INTERIOR DE CADA SALA ─────────────────────
+// Dibuixem una perspectiva senzilla d'una sala sobre un canvas i la difuminem
+function makeRoomPreviewTexture(theme) {
+  const S = 256;
+  // Canvas de dibuix sense blur
+  const off = document.createElement('canvas');
+  off.width = S; off.height = S;
+  const oc = off.getContext('2d');
 
-const cubes = [];        // { mesh, theme, index, lookProgress }
-const textMeshes = [];   // { mesh, texture, canvas }
+  const themeColor = '#' + new THREE.Color(theme.color).getHexString();
 
-function makeLabelCanvas(text, bgHex) {
+  // Fons / paret del fons: color accent del tema clar
+  oc.fillStyle = '#aaaaaa';
+  oc.fillRect(0, 0, S, S);
+
+  // Perspectiva: punt de fuga al centre
+  const cx = S * 0.5, cy = S * 0.48;
+  const margin = S * 0.22;
+
+  // Paret esquerra
+  oc.fillStyle = '#999999';
+  oc.beginPath();
+  oc.moveTo(0, 0); oc.lineTo(cx, cy);
+  oc.lineTo(cx, S); oc.lineTo(0, S);
+  oc.closePath(); oc.fill();
+
+  // Paret dreta
+  oc.fillStyle = '#777777';
+  oc.beginPath();
+  oc.moveTo(S, 0); oc.lineTo(cx, cy);
+  oc.lineTo(cx, S); oc.lineTo(S, S);
+  oc.closePath(); oc.fill();
+
+  // Terra negre
+  oc.fillStyle = '#111111';
+  oc.beginPath();
+  oc.moveTo(0, S); oc.lineTo(cx, S * 0.72);
+  oc.lineTo(S, S);
+  oc.closePath(); oc.fill();
+
+  // Sostre fosc
+  oc.fillStyle = '#333333';
+  oc.beginPath();
+  oc.moveTo(0, 0); oc.lineTo(cx, S * 0.22);
+  oc.lineTo(S, 0);
+  oc.closePath(); oc.fill();
+
+  // Línia de color del tema al centre (com un element decoratiu)
+  oc.strokeStyle = themeColor;
+  oc.lineWidth = 10;
+  oc.globalAlpha = 0.9;
+  oc.strokeRect(margin, margin, S - margin * 2, S - margin * 2);
+  oc.globalAlpha = 1;
+
+  // ── Ara apliquem blur al canvas final ──
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
+  canvas.width = S; canvas.height = S;
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#' + new THREE.Color(bgHex).getHexString();
-  ctx.globalAlpha = 0.85;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.filter = 'blur(7px)';
+  ctx.drawImage(off, 0, 0);
+
+  // Sobreposem una lleugera capa del color del tema (tint)
+  ctx.filter = 'none';
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = themeColor;
+  ctx.fillRect(0, 0, S, S);
   ctx.globalAlpha = 1;
-  ctx.fillStyle = '#000000';
-  ctx.font = 'bold 70px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
   return canvas;
 }
 
+// ─── HUB: sala inicial amb 4 cubs ─────────────────────────────────────
+const hubGroup = new THREE.Group();
+scene.add(hubGroup);
+
+// Terra del hub (un sol mesh, sense solapaments)
+const hubFloorMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+const hubFloor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), hubFloorMat);
+hubFloor.rotation.x = -Math.PI / 2;
+hubGroup.add(hubFloor);
+
+// Graella lleugeríssima per sobre del terra (pujada 1mm per evitar z-fighting)
+const grid = new THREE.GridHelper(30, 30, 0x333344, 0x222233);
+grid.position.y = 0.001;
+hubGroup.add(grid);
+
+// ── Cubs ──
+const CUBE_SIZE   = 0.32;
+const HOVER_SIZE  = 0.45;
+const RADIUS      = 2.4;
+const CUBE_Y      = 1.3;
+
+const cubes      = [];  // { mesh, previewMesh, index, prog }
+const labelPlanes = []; // mesh del cartell per cada cub
+
 for (let i = 0; i < 4; i++) {
   const angle = (i / 4) * Math.PI * 2;
-  const x = Math.sin(angle) * CUBE_RADIUS;
-  const z = -Math.cos(angle) * CUBE_RADIUS;
+  const x = Math.sin(angle) * RADIUS;
+  const z = -Math.cos(angle) * RADIUS;
+  const theme = themes[i];
 
-  const geo = new THREE.BoxGeometry(CUBE_BASE_SIZE, CUBE_BASE_SIZE, CUBE_BASE_SIZE);
-  const mat = new THREE.MeshStandardMaterial({ color: themes[i].color });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x, CUBE_HEIGHT, z);
+  // ── Textura de preview difuminada ──
+  const previewCanvas = makeRoomPreviewTexture(theme);
+  const previewTex = new THREE.CanvasTexture(previewCanvas);
+
+  // Material amb la textura difuminada (semitransparent per veure l'interior)
+  const cubeMat = new THREE.MeshPhysicalMaterial({
+    map: previewTex,
+    color: 0xffffff,
+    roughness: 0.05,
+    metalness: 0.0,
+    transmission: 0.0,   // no glass, volem veure la textura
+    transparent: true,
+    opacity: 0.88,
+  });
+
+  // RoundedBox per tenir vores arrodonides
+  const geo = new RoundedBoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE, 4, 0.06);
+  const mesh = new THREE.Mesh(geo, cubeMat);
+  mesh.position.set(x, CUBE_Y, z);
   hubGroup.add(mesh);
 
-  const cubeData = { mesh, theme: themes[i], index: i, lookProgress: 0, baseScale: 1 };
-  cubes.push(cubeData);
+  // ── Cartell: fons blanc, text negre ──
+  const labelCanvas = document.createElement('canvas');
+  labelCanvas.width = 512; labelCanvas.height = 180;
+  const lc = labelCanvas.getContext('2d');
 
-  // Text que "surt" de dins del cub cap amunt
-  const canvas = makeLabelCanvas(themes[i].label, themes[i].color);
-  const texture = new THREE.CanvasTexture(canvas);
-  const textGeo = new THREE.PlaneGeometry(0.6, 0.3);
-  const textMat = new THREE.MeshBasicMaterial({
-    map: texture,
+  // Fons blanc arrodonit
+  lc.fillStyle = '#ffffff';
+  const r = 30;
+  const w = 512, h = 180;
+  lc.beginPath();
+  lc.moveTo(r, 0);
+  lc.lineTo(w - r, 0); lc.quadraticCurveTo(w, 0, w, r);
+  lc.lineTo(w, h - r); lc.quadraticCurveTo(w, h, w - r, h);
+  lc.lineTo(r, h); lc.quadraticCurveTo(0, h, 0, h - r);
+  lc.lineTo(0, r); lc.quadraticCurveTo(0, 0, r, 0);
+  lc.closePath(); lc.fill();
+
+  // Text negre
+  lc.fillStyle = '#111111';
+  lc.font = 'bold 72px Arial';
+  lc.textAlign = 'center';
+  lc.textBaseline = 'middle';
+  lc.fillText(theme.label, w / 2, h / 2);
+
+  const labelTex = new THREE.CanvasTexture(labelCanvas);
+  const labelMat = new THREE.MeshBasicMaterial({
+    map: labelTex,
     transparent: true,
     opacity: 0,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    depthWrite: false,
   });
-  const textMesh = new THREE.Mesh(textGeo, textMat);
-  textMesh.position.set(x, CUBE_HEIGHT, z);
-  hubGroup.add(textMesh);
+  const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.65, 0.23), labelMat);
+  labelMesh.position.set(x, CUBE_Y, z);
+  hubGroup.add(labelMesh);
 
-  textMeshes.push({ mesh: textMesh, cubeIndex: i });
+  cubes.push({ mesh, index: i, prog: 0 });
+  labelPlanes.push(labelMesh);
 }
 
-// --- Sales (es generen sota demanda) ---
-const roomsGroup = new THREE.Group();
-roomsGroup.visible = false;
-scene.add(roomsGroup);
+// ─── SALA: buida, parets grises + terra negre (plans separats, sense z-fighting) ──
+const roomGroup = new THREE.Group();
+roomGroup.visible = false;
+scene.add(roomGroup);
 
-function clearGroup(group) {
-  while (group.children.length > 0) {
-    const child = group.children[0];
-    group.remove(child);
-    if (child.geometry) child.geometry.dispose();
-    if (child.material) {
-      if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
-      else child.material.dispose();
+function clearGroup(g) {
+  while (g.children.length) {
+    const c = g.children[0];
+    g.remove(c);
+    c.geometry?.dispose();
+    if (c.material) {
+      (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose());
     }
   }
 }
 
 function buildRoom(themeIndex) {
-  clearGroup(roomsGroup);
-  const theme = themes[themeIndex];
-  const ROOM_SIZE = 10;
-  const ROOM_HEIGHT = 5;
+  clearGroup(roomGroup);
 
-  // Terra
-  const floorMat = new THREE.MeshStandardMaterial({ color: theme.color });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_SIZE, ROOM_SIZE), floorMat);
+  const R = 6;     // mig costat de la sala (12x12m)
+  const H = 4;     // alçada de la sala
+
+  const FLOOR_COLOR = 0x0a0a0a;   // quasi negre
+  const WALL_COLOR  = 0x7a7a7a;   // gris mig
+
+  // Terra ─ un sol PlaneGeometry, res més
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(R * 2, R * 2),
+    new THREE.MeshStandardMaterial({ color: FLOOR_COLOR })
+  );
   floor.rotation.x = -Math.PI / 2;
-  roomsGroup.add(floor);
+  floor.position.y = 0;
+  roomGroup.add(floor);
 
   // Sostre
-  const ceilMat = new THREE.MeshStandardMaterial({ color: 0x111111, side: THREE.DoubleSide });
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_SIZE, ROOM_SIZE), ceilMat);
-  ceil.rotation.x = Math.PI / 2;
-  ceil.position.y = ROOM_HEIGHT;
-  roomsGroup.add(ceil);
+  const ceil = new THREE.Mesh(
+    new THREE.PlaneGeometry(R * 2, R * 2),
+    new THREE.MeshStandardMaterial({ color: 0x1a1a1a, side: THREE.BackSide })
+  );
+  ceil.rotation.x = -Math.PI / 2;
+  ceil.position.y = H;
+  roomGroup.add(ceil);
 
-  // Parets (vistes des de dins -> BackSide)
-  const wallMat = new THREE.MeshStandardMaterial({ color: theme.accent, side: THREE.BackSide });
-  const wallGeo = new THREE.BoxGeometry(ROOM_SIZE, ROOM_HEIGHT, ROOM_SIZE);
-  const walls = new THREE.Mesh(wallGeo, wallMat);
-  walls.position.y = ROOM_HEIGHT / 2;
-  roomsGroup.add(walls);
+  // 4 parets (plans individuals, cara visible cap endins)
+  const wallMat = new THREE.MeshStandardMaterial({ color: WALL_COLOR, side: THREE.BackSide });
+  const wallGeo = new THREE.PlaneGeometry(R * 2, H);
 
-  // Llum ambient de la sala (color del tema)
-  const roomLight = new THREE.PointLight(theme.color, 1.2, 15);
-  roomLight.position.set(0, ROOM_HEIGHT - 0.5, 0);
-  roomsGroup.add(roomLight);
+  const wallConfigs = [
+    { pos: [0, H / 2, -R], rot: [0, 0, 0] },         // davant
+    { pos: [0, H / 2,  R], rot: [0, Math.PI, 0] },   // darrere
+    { pos: [-R, H / 2, 0], rot: [0, Math.PI / 2, 0] },  // esquerra
+    { pos: [ R, H / 2, 0], rot: [0, -Math.PI / 2, 0] }, // dreta
+  ];
 
-  // Decoració diferent per tema
-  const decoMat = new THREE.MeshStandardMaterial({ color: theme.color });
-  if (themeIndex === 0) {
-    // FOC: columnes + boles "brasa" flotants
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const px = Math.sin(a) * 3.5;
-      const pz = Math.cos(a) * 3.5;
-      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3, 12), decoMat);
-      col.position.set(px, 1.5, pz);
-      roomsGroup.add(col);
-      const ember = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12),
-        new THREE.MeshStandardMaterial({ color: 0xff8800, emissive: 0xff3300, emissiveIntensity: 1 }));
-      ember.position.set(px, 3.2, pz);
-      roomsGroup.add(ember);
-    }
-  } else if (themeIndex === 1) {
-    // BOSC: "arbres" fets amb cons + cilindres
-    for (let i = 0; i < 8; i++) {
-      const px = (Math.random() - 0.5) * 8;
-      const pz = (Math.random() - 0.5) * 8;
-      if (Math.abs(px) < 1 && Math.abs(pz) < 1) continue;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 1.2, 8),
-        new THREE.MeshStandardMaterial({ color: 0x553311 }));
-      trunk.position.set(px, 0.6, pz);
-      roomsGroup.add(trunk);
-      const leaves = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 10), decoMat);
-      leaves.position.set(px, 1.8, pz);
-      roomsGroup.add(leaves);
-    }
-  } else if (themeIndex === 2) {
-    // GEL: blocs de "gel" (cubs translúcids) i cristalls
-    for (let i = 0; i < 10; i++) {
-      const px = (Math.random() - 0.5) * 8;
-      const pz = (Math.random() - 0.5) * 8;
-      const s = 0.4 + Math.random() * 0.6;
-      const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0),
-        new THREE.MeshStandardMaterial({ color: theme.color, transparent: true, opacity: 0.7, roughness: 0.1 }));
-      ice.position.set(px, s, pz);
-      roomsGroup.add(ice);
-    }
-  } else {
-    // SORRA: dunes (esferes aixafades) + "cactus"
-    for (let i = 0; i < 6; i++) {
-      const px = (Math.random() - 0.5) * 7;
-      const pz = (Math.random() - 0.5) * 7;
-      const dune = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), decoMat);
-      dune.scale.set(1.5, 0.3, 1.5);
-      dune.position.set(px, 0.1, pz);
-      roomsGroup.add(dune);
-    }
-    for (let i = 0; i < 4; i++) {
-      const px = (Math.random() - 0.5) * 6;
-      const pz = (Math.random() - 0.5) * 6;
-      const cactus = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1.4, 8),
-        new THREE.MeshStandardMaterial({ color: 0x2e8b57 }));
-      cactus.position.set(px, 0.7, pz);
-      roomsGroup.add(cactus);
-    }
-  }
+  wallConfigs.forEach(({ pos, rot }) => {
+    const wall = new THREE.Mesh(wallGeo, wallMat);
+    wall.position.set(...pos);
+    wall.rotation.set(...rot);
+    roomGroup.add(wall);
+  });
 
-  // Text central amb el nom de la sala
-  const labelCanvas = makeLabelCanvas(theme.name, theme.color);
-  const labelTex = new THREE.CanvasTexture(labelCanvas);
-  const labelMat = new THREE.MeshBasicMaterial({ map: labelTex, transparent: true, side: THREE.DoubleSide });
-  const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 1), labelMat);
-  labelMesh.position.set(0, 2.5, -4.9);
-  roomsGroup.add(labelMesh);
+  // Llum suau al centre de la sala
+  const light = new THREE.PointLight(0xffffff, 1.5, 20);
+  light.position.set(0, H - 0.5, 0);
+  roomGroup.add(light);
+
+  // Cartell del nom de la sala a la paret del davant
+  const theme = themes[themeIndex];
+  const nc = document.createElement('canvas');
+  nc.width = 1024; nc.height = 256;
+  const nctx = nc.getContext('2d');
+
+  // Fons blanc arrodonit
+  nctx.fillStyle = '#ffffff';
+  const rr = 40, ww = 1024, hh = 256;
+  nctx.beginPath();
+  nctx.moveTo(rr, 0); nctx.lineTo(ww - rr, 0); nctx.quadraticCurveTo(ww, 0, ww, rr);
+  nctx.lineTo(ww, hh - rr); nctx.quadraticCurveTo(ww, hh, ww - rr, hh);
+  nctx.lineTo(rr, hh); nctx.quadraticCurveTo(0, hh, 0, hh - rr);
+  nctx.lineTo(0, rr); nctx.quadraticCurveTo(0, 0, rr, 0);
+  nctx.closePath(); nctx.fill();
+
+  nctx.fillStyle = '#111111';
+  nctx.font = 'bold 120px Arial';
+  nctx.textAlign = 'center';
+  nctx.textBaseline = 'middle';
+  nctx.fillText(theme.label, ww / 2, hh / 2);
+
+  const nTex = new THREE.CanvasTexture(nc);
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(3, 0.75),
+    new THREE.MeshBasicMaterial({ map: nTex, transparent: true, side: THREE.DoubleSide })
+  );
+  sign.position.set(0, H * 0.7, -R + 0.05);
+  roomGroup.add(sign);
 }
 
-// --- Estat general ---
-let state = 'hub'; // 'hub' o 'room'
-let activeRoomIndex = -1;
+// ─── BOTÓ VR ──────────────────────────────────────────────────────────
+const statusEl = document.getElementById('status');
+statusEl.textContent = 'Three.js carregat. Comprovant suport VR...';
 
-// --- Botó VR ---
 if (navigator.xr) {
   let resolved = false;
   setTimeout(() => {
     if (!resolved) {
-      statusEl.textContent = "La comprovació de suport VR està trigant massa. Prova de recarregar.";
-      statusEl.style.color = "#ffaa00";
+      statusEl.textContent = 'La comprovació VR triga massa. Prova de recarregar.';
+      statusEl.style.color = '#fa0';
     }
   }, 5000);
 
-  navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+  navigator.xr.isSessionSupported('immersive-vr').then(supported => {
     resolved = true;
     if (supported) {
-      vrButton.disabled = false;
-      vrButton.textContent = "Entrar en VR";
-      statusEl.textContent = "Llest. Posa't les ulleres i prem el botó.";
-      const xrBtn = VRButton.createButton(renderer);
-      vrButton.replaceWith(xrBtn);
-      xrBtn.id = "vrButton";
+      statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó.';
+      const btn = VRButton.createButton(renderer);
+      document.body.appendChild(btn);
     } else {
-      vrButton.textContent = "VR immersiu no suportat en aquest navegador/dispositiu";
-      statusEl.textContent = "Obre aquesta pàgina amb el navegador del Quest 3 per HTTPS.";
+      statusEl.textContent = 'VR immersiu no suportat. Obre per HTTPS amb el Meta Quest Browser.';
     }
-  }).catch((err) => {
+  }).catch(err => {
     resolved = true;
-    vrButton.textContent = "Error comprovant suport VR";
-    statusEl.textContent = "Error: " + err.message;
-    statusEl.style.color = "#ff6666";
+    statusEl.textContent = 'Error VR: ' + err.message;
+    statusEl.style.color = '#f66';
   });
 } else {
-  vrButton.textContent = "WebXR no disponible";
-  statusEl.textContent = "Aquest navegador no suporta WebXR. Fes servir el Meta Quest Browser.";
+  statusEl.textContent = 'WebXR no disponible. Fes servir el Meta Quest Browser.';
 }
 
-// --- Detecció de quin cub es mira (només té sentit a 'hub') ---
-const camForward = new THREE.Vector3();
-const camPos = new THREE.Vector3();
-const toCube = new THREE.Vector3();
+// ─── ESTAT ────────────────────────────────────────────────────────────
+let state = 'hub';  // 'hub' | 'room'
+const buttonStates = {};
 
-function getLookedCubeIndex() {
-  camera.getWorldDirection(camForward);
-  camera.getWorldPosition(camPos);
+// ─── DETECCIÓ DE QUIN CUB ES MIRA ─────────────────────────────────────
+const _fwd = new THREE.Vector3();
+const _cam = new THREE.Vector3();
+const _to  = new THREE.Vector3();
 
-  let bestIndex = -1;
-  let bestDot = 0.75; // llindar: cal mirar prou de cara
+function getLookedCube() {
+  camera.getWorldDirection(_fwd);
+  camera.getWorldPosition(_cam);
+  let best = -1, bestDot = 0.72;
   for (let i = 0; i < cubes.length; i++) {
-    toCube.copy(cubes[i].mesh.position).sub(camPos).normalize();
-    const dot = camForward.dot(toCube);
-    if (dot > bestDot) {
-      bestDot = dot;
-      bestIndex = i;
-    }
+    _to.copy(cubes[i].mesh.position).sub(_cam).normalize();
+    const d = _fwd.dot(_to);
+    if (d > bestDot) { bestDot = d; best = i; }
   }
-  return bestIndex;
+  return best;
 }
 
-// --- Entrar / sortir de sala ---
-function enterRoom(index) {
-  state = 'room';
-  activeRoomIndex = index;
-  buildRoom(index);
+// ─── ENTRADA / SORTIDA DE SALA ─────────────────────────────────────────
+function enterRoom(idx) {
+  buildRoom(idx);
   hubGroup.visible = false;
-  roomsGroup.visible = true;
+  roomGroup.visible = true;
+  state = 'room';
 }
 
 function exitRoom() {
-  state = 'hub';
-  activeRoomIndex = -1;
-  clearGroup(roomsGroup);
-  roomsGroup.visible = false;
+  clearGroup(roomGroup);
+  roomGroup.visible = false;
   hubGroup.visible = true;
+  state = 'hub';
 }
 
-// --- Botons del mando dret ---
-const buttonStates = {};
+// ─── CONTROLADORS ─────────────────────────────────────────────────────
+const infoEl = document.getElementById('controllerInfo');
 
-function handleControllerInput() {
+function handleInput(frame) {
   const session = renderer.xr.getSession();
   if (!session) return;
 
-  for (const source of session.inputSources) {
-    if (!source.gamepad || source.handedness !== 'right') continue;
+  const refSpace = renderer.xr.getReferenceSpace();
+  let infoText = 'Posició dels mandos:\n';
+  let anyController = false;
 
-    const gp = source.gamepad;
-    const aPressed = gp.buttons[4] && gp.buttons[4].pressed;
-    const bPressed = gp.buttons[5] && gp.buttons[5].pressed;
+  for (const src of session.inputSources) {
+    if (!src.gamepad) continue;
+
+    // Posició
+    if (frame && refSpace) {
+      const space = src.gripSpace || src.targetRaySpace;
+      if (space) {
+        const pose = frame.getPose(space, refSpace);
+        if (pose) {
+          anyController = true;
+          const p = pose.transform.position;
+          const hand = src.handedness === 'right' ? 'Dret    ' : 'Esquerre';
+          infoText += `${hand}: x=${p.x.toFixed(2)}  y=${p.y.toFixed(2)}  z=${p.z.toFixed(2)}\n`;
+        }
+      }
+    }
+
+    // Botons (mando dret)
+    if (src.handedness !== 'right') continue;
+    const gp = src.gamepad;
+    const aPressed = gp.buttons[4]?.pressed;
+    const bPressed = gp.buttons[5]?.pressed;
 
     if (aPressed && !buttonStates.a) {
       if (state === 'hub') {
-        const looked = getLookedCubeIndex();
-        if (looked !== -1) enterRoom(looked);
+        const idx = getLookedCube();
+        if (idx !== -1) enterRoom(idx);
       }
     }
     if (bPressed && !buttonStates.b) {
@@ -418,75 +464,45 @@ function handleControllerInput() {
     buttonStates.a = aPressed;
     buttonStates.b = bPressed;
   }
+
+  infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
 
-// --- Posició dels mandos a pantalla ---
-function updateControllerInfo(frame) {
-  const session = renderer.xr.getSession();
-  if (!session || !frame) {
-    controllerInfoEl.textContent = "Mandos: esperant sessió VR...";
-    return;
-  }
-  const refSpace = renderer.xr.getReferenceSpace();
-  if (!refSpace) return;
-
-  let text = "Posició dels mandos:\n";
-  let found = false;
-
-  for (const source of session.inputSources) {
-    if (!source.gamepad) continue;
-    const space = source.gripSpace || source.targetRaySpace;
-    if (!space) continue;
-    const pose = frame.getPose(space, refSpace);
-    if (!pose) continue;
-    found = true;
-    const p = pose.transform.position;
-    const hand = source.handedness === 'right' ? 'Dret ' : (source.handedness === 'left' ? 'Esquerre' : 'Desconegut');
-    text += `${hand}: x=${p.x.toFixed(2)} y=${p.y.toFixed(2)} z=${p.z.toFixed(2)}\n`;
-  }
-
-  controllerInfoEl.textContent = found ? text : "Mandos: cap detectat";
-}
-
-// --- Animació ---
-const ROTATION_SPEED_Y = 0.01;
-const ROTATION_SPEED_X = 0.005;
-
-function updateHub(dt) {
-  const lookedIndex = state === 'hub' ? getLookedCubeIndex() : -1;
-
-  for (let i = 0; i < cubes.length; i++) {
-    const c = cubes[i];
-    c.mesh.rotation.y += ROTATION_SPEED_Y;
-    c.mesh.rotation.x += ROTATION_SPEED_X;
-
-    const isLooked = (i === lookedIndex);
-    // Progrés suau cap a 1 (mirat) o 0 (no mirat)
-    const targetProgress = isLooked ? 1 : 0;
-    c.lookProgress += (targetProgress - c.lookProgress) * 0.12;
-
-    const scale = CUBE_BASE_SIZE + (CUBE_HOVER_SIZE - CUBE_BASE_SIZE) * c.lookProgress;
-    const s = scale / CUBE_BASE_SIZE;
-    c.mesh.scale.set(s, s, s);
-
-    // Text: surt de dins del cub (y = centre) cap amunt
-    const td = textMeshes[i];
-    const startY = CUBE_HEIGHT;
-    const endY = CUBE_HEIGHT + 0.5;
-    td.mesh.position.y = startY + (endY - startY) * c.lookProgress;
-    td.mesh.material.opacity = c.lookProgress;
-    td.mesh.lookAt(camPos);
-  }
-}
+// ─── LOOP D'ANIMACIÓ ──────────────────────────────────────────────────
+const _camPos2D = new THREE.Vector3();
 
 function animate(time, frame) {
   if (state === 'hub') {
-    updateHub();
+    camera.getWorldPosition(_camPos2D);
+
+    const looked = getLookedCube();
+
+    for (let i = 0; i < cubes.length; i++) {
+      const c = cubes[i];
+      c.mesh.rotation.y += 0.012;
+      c.mesh.rotation.x += 0.006;
+
+      // El cub mirat creix suaument
+      const target = (i === looked) ? 1 : 0;
+      c.prog += (target - c.prog) * 0.1;
+
+      const s = (CUBE_SIZE + (HOVER_SIZE - CUBE_SIZE) * c.prog) / CUBE_SIZE;
+      c.mesh.scale.setScalar(s);
+
+      // Cartell: surt cap amunt i apareix
+      const lp = labelPlanes[i];
+      const baseY  = CUBE_Y;
+      const floatY = CUBE_Y + 0.48;
+      lp.position.y = baseY + (floatY - baseY) * c.prog;
+      lp.material.opacity = c.prog;
+      lp.lookAt(_camPos2D.x, lp.position.y, _camPos2D.z);
+    }
   }
-  handleControllerInput();
-  updateControllerInfo(frame);
+
+  handleInput(frame);
   renderer.render(scene, camera);
 }
+
 renderer.setAnimationLoop(animate);
 
 window.addEventListener('resize', () => {
