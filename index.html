@@ -101,6 +101,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
+renderer.xr.addEventListener('sessionend', () => {
+  exitRoom();
+});
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -295,7 +298,6 @@ const IMAGE_Y = 1.0;
 
 const loader = new THREE.TextureLoader();
 const cubes = []; // { mesh, index, prog }
-const labelTopPlanes = [];
 const labelBottomPlanes = [];
 
 for (let i = 0; i < themes.length; i++) {
@@ -336,33 +338,11 @@ for (let i = 0; i < themes.length; i++) {
     for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], centerX, startY + i * lineHeight);
   }
 
-  // superior
-  tc.clearRect(0,0,tcanvas.width,tcanvas.height);
-  roundedRect(tc, 8, 8, tcanvas.width - 16, tcanvas.height - 16, 28);
-  tc.fillStyle = 'rgba(255,255,255,0.98)';
-  tc.fill();
-  tc.fillStyle = '#111111';
-  tc.font = 'bold 56px Arial';
-  tc.textAlign = 'center';
-  tc.shadowColor = 'rgba(0,0,0,0.45)';
-  tc.shadowBlur = 10;
-  drawWrappedTextCentered(tc, theme.text, tcanvas.width/2, tcanvas.width - 160, 52);
-  const ttex = new THREE.CanvasTexture(tcanvas);
-  const tmat = new THREE.MeshBasicMaterial({ map: ttex, transparent: true, side: THREE.DoubleSide });
-  const tmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.5), tmat);
-  tmesh.position.set(x, IMAGE_Y + IMAGE_HEIGHT/2 + 0.34, z);
-  tmesh.lookAt(0, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, 0);
-  tmat.opacity = 0.25;
-  hubGroup.add(tmesh);
-
   // inferior
   const bcanvas = document.createElement('canvas');
-  bcanvas.width = 1024; bcanvas.height = 220;
+  bcanvas.width = 1024; bcanvas.height = 160;
   const bc = bcanvas.getContext('2d');
   bc.clearRect(0,0,bcanvas.width,bcanvas.height);
-  roundedRect(bc, 8, 8, bcanvas.width - 16, bcanvas.height - 16, 20);
-  bc.fillStyle = 'rgba(255,255,255,0.98)';
-  bc.fill();
   bc.fillStyle = '#111111';
   bc.font = 'bold 40px Arial';
   bc.textAlign = 'center';
@@ -371,10 +351,9 @@ for (let i = 0; i < themes.length; i++) {
   drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 160, 40);
   const btex = new THREE.CanvasTexture(bcanvas);
   const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
-  const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.36), bmat);
-  bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.45, z);
-  bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, 0);
-  bmat.opacity = 0.25;
+  const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), bmat);
+  bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, z);
+  bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, 0);
   hubGroup.add(bmesh);
 
   // Carrega imatge i ajusta aspect ratio (ample = meitat d'IMAGE_WIDTH)
@@ -394,20 +373,15 @@ for (let i = 0; i < themes.length; i++) {
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     // ajustem etiquetes segons nova alçada
-    tmesh.geometry.dispose();
-    tmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), 0.5);
     bmesh.geometry.dispose();
     bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), 0.36);
-    // compute positions using image actual height and offset slightly toward camera
+    // compute positions using image actual height
     const imgPos = mesh.position.clone();
-    const tY = IMAGE_Y + h/2 + 0.34;
     const bY = IMAGE_Y - h/2 - 0.45;
-    tmesh.position.set(imgPos.x, tY, imgPos.z);
     bmesh.position.set(imgPos.x, bY, imgPos.z);
   });
 
   cubes.push({ mesh, index: i, prog: 0 });
-  labelTopPlanes.push(tmesh);
   labelBottomPlanes.push(bmesh);
 }
 
@@ -517,10 +491,17 @@ function buildRoom(themeIndex) {
   // Labels dins la sala: Historia, Productes, Grup
   roomLabels.length = 0;
   const labels = ['Historia', 'Productes', 'Grup'];
-  const RL_RADIUS = 2.0;
-  const RL_Y = 1.6;
+  const RL_RADIUS = 2.4;
+  const RL_Y = 1.2;
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  dir.y = 0;
+  if (dir.lengthSq() === 0) dir.set(0, 0, -1);
+  dir.normalize();
+  const baseAngle = Math.atan2(dir.x, -dir.z);
+  const labelAngles = [baseAngle, baseAngle + (2 * Math.PI / 3), baseAngle - (2 * Math.PI / 3)];
   for (let i = 0; i < labels.length; i++) {
-    const ang = (i / labels.length) * Math.PI * 2;
+    const ang = labelAngles[i];
     const lx = Math.sin(ang) * RL_RADIUS;
     const lz = -Math.cos(ang) * RL_RADIUS;
 
@@ -740,29 +721,19 @@ function animate(time, frame) {
       c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
 
       // Labels: apareixen quan l'element està enfocat; usem l'altura real de la imatge
-      const tp = labelTopPlanes[i];
       const bp = labelBottomPlanes[i];
       const geoH = (c.mesh.geometry && c.mesh.geometry.parameters && c.mesh.geometry.parameters.height) ? c.mesh.geometry.parameters.height : IMAGE_HEIGHT;
-      // move top text slightly higher and bottom text slightly higher
-      const topBaseOffset = 0.34;
-      const bottomBaseOffset = 0.45;
-      const topY = IMAGE_Y + geoH / 2 + topBaseOffset;
+      const bottomBaseOffset = 0.12;
       const botY = IMAGE_Y - geoH / 2 - bottomBaseOffset;
-      tp.position.y = topY;
       bp.position.y = botY;
-      // keep texts at same distance as the image
+      // keep text at same distance as the image
       const imgPos = c.mesh.position.clone();
-      tp.position.x = imgPos.x;
-      tp.position.z = imgPos.z;
       bp.position.x = imgPos.x;
       bp.position.z = imgPos.z;
       const base = 0.25; // visible even when not focused
       const vis = base + (1 - base) * c.prog;
-      tp.material.opacity = vis;
       bp.material.opacity = vis;
-      tp.lookAt(_camPos2D.x, tp.position.y, _camPos2D.z);
       bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z);
-      tp.rotateX(-0.12);
       bp.rotateX(-0.12);
     }
   }
