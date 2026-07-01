@@ -34,76 +34,22 @@
   }
   #hud {
     position: absolute;
+    bottom: 18px;
     left: 50%;
-    bottom: 16px;
     transform: translateX(-50%);
-    width: 280px;
-    background: rgba(0, 0, 0, 0.72);
-    border: 1px solid rgba(255,255,255,0.16);
-    border-radius: 18px;
-    padding: 10px 12px;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    justify-content: center;
+    width: 260px;
+    background: rgba(0,0,0,0.65);
+    color: white;
+    border-radius: 10px;
+    padding: 6px 8px;
+    text-align: center;
     pointer-events: none;
-    color: #fff;
-    font-size: 12px;
-    z-index: 10;
-  }
-  #hudLogo {
-    width: 36px;
-    height: 36px;
-    object-fit: contain;
-  }
-  #hudBody {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-  }
-  #hudBody span { display: block; }
-  #hudButtons {
-    display: flex;
-    gap: 6px;
-    justify-content: space-between;
-  }
-  .hudButton {
-    display: inline-flex;
-    width: 38px;
-    height: 28px;
     align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.2);
-    font-weight: bold;
   }
-  #hudIcon {
-    width: 56px;
-    height: 34px;
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 22px;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.25);
-  }
-  .controllerBtn {
-    display: inline-flex;
-    width: 16px;
-    height: 16px;
-    margin: 0 2px;
-    border-radius: 50%;
-    background: #ffffff;
-    color: #111111;
-    font-size: 10px;
-    font-weight: bold;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(0,0,0,0.15);
-  }
+  #hud img.logo { height: 28px; margin-bottom: 6px; }
+  #hud .controller { width: 220px; height: 64px; }
   canvas { display: block; }
 </style>
 </head>
@@ -114,16 +60,17 @@
 </div>
 <div id="controllerInfo">Mandos: esperant sessió VR...</div>
 <div id="hud">
-  <img id="hudLogo" src="roquet.png" alt="Roquet logo" />
-  <div id="hudIcon">
-    <span class="controllerBtn">A</span>
-    <span class="controllerBtn">B</span>
-  </div>
-  <div id="hudBody">
-    <span style="font-weight:bold;">Meta Quest 3</span>
-    <span>A: entra a la sala de la imatge</span>
-    <span>B: torna enrere</span>
-  </div>
+  <img class="logo" src="roquet.png" alt="Roquet">
+  <svg class="controller" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
+    <rect x="10" y="20" width="380" height="80" rx="18" fill="#222" stroke="#444"/>
+    <circle cx="280" cy="60" r="18" fill="#0b0" />
+    <text x="280" y="64" font-size="20" fill="#fff" text-anchor="middle">A</text>
+    <circle cx="320" cy="60" r="18" fill="#b00" />
+    <text x="320" y="64" font-size="20" fill="#fff" text-anchor="middle">B</text>
+    <text x="200" y="40" font-size="14" fill="#ccc" text-anchor="middle">A = Entrar</text>
+    <text x="200" y="62" font-size="14" fill="#ccc" text-anchor="middle">B = Sortir</text>
+    <text x="200" y="92" font-size="12" fill="#888" text-anchor="middle">Meta Quest 3</text>
+  </svg>
 </div>
 
 <script type="importmap">
@@ -148,7 +95,6 @@
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 // ─── RENDER ────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -170,12 +116,24 @@ scene.add(dirLight);
 
 // ─── TEMES ────────────────────────────────────────────────────────────
 const themes = [
-  { label: 'Dinacil',      color: 0xe63946, wallColor: 0x888888 },
-  { label: 'Hidràulics',   color: 0x2dc653, wallColor: 0x888888 },
-  { label: 'Bombes',       color: 0x4895ef, wallColor: 0x888888 },
-  { label: 'Cilindres',    color: 0xf4a261, wallColor: 0x888888 },
-  { label: 'Ploiesti',     color: 0x8d67ff, wallColor: 0x888888 },
-  { label: 'Fundició',     color: 0xffa500, wallColor: 0x888888 },
+  { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png',
+    text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo',
+    text2: 'C/Antoni Figueras ,91 Bloc B - 08551 Tona , Barcelona , España' },
+  { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png',
+    text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.',
+    text2: 'C/Antoni Figueras , 91 Bloc B - 08551 Tona , Barcelona, España' },
+  { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png',
+    text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición',
+    text2: 'Ctra. Sant Hipòlit, 10 - ​08500 , Vic, Barcelona, España' },
+  { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png',
+    text: 'Ubicada en Centelles- 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
+    text2: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra - 08540 , Centelles, Barcelona, España' },
+  { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png',
+    text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.',
+    text2: 'WDP Industrial Park / DN72 , Km. 3,2 - ​107025 Aricestii Rahtivani , Prahova , Romania' },
+  { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png',
+    text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.',
+    text2: 'C/ Disseminats, S/N - 08510, Roda de Ter, Barcelona, España' },
 ];
 
 // ─── TEXTURA DIFUMINADA DEL INTERIOR DE CADA SALA ─────────────────────
@@ -249,40 +207,7 @@ function makeRoomPreviewTexture(theme) {
   return canvas;
 }
 
-function makeTextTexture(text, width = 1024, height = 240, fontSize = 36, color = '#ffffff') {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(10, 10, 20, 0.9)';
-  ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = color;
-  ctx.font = `${fontSize}px Arial`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const words = text.split(' ');
-  const lines = [];
-  let line = '';
-  const maxWidth = width - 80;
-  for (let word of words) {
-    const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width > maxWidth) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = test;
-    }
-  }
-  if (line) lines.push(line);
-  const lineHeight = fontSize * 1.2;
-  const startY = height / 2 - (lines.length - 1) * lineHeight / 2;
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], width / 2, startY + i * lineHeight);
-  }
-  return new THREE.CanvasTexture(canvas);
-}
-
-// ─── HUB: sala inicial amb 6 imatges ─────────────────────────────────
+// ─── HUB: sala inicial amb 6 imatges ─────────────────────────────────────
 const hubGroup = new THREE.Group();
 scene.add(hubGroup);
 
@@ -297,138 +222,94 @@ const grid = new THREE.GridHelper(30, 30, 0x333344, 0x222233);
 grid.position.y = 0.001;
 hubGroup.add(grid);
 
-// ── Cubs ──
-const IMAGE_HEIGHT = 0.15;
-const HOVER_FACTOR = 1.12;
-const RADIUS       = 2.4;
-const CUBE_Y       = 1.3;
+// ── Imatges ──
+const IMAGE_WIDTH = 1.2;
+const IMAGE_HEIGHT = 0.8;
+const HOVER_SCALE = 1.18;
+const RADIUS = 2.8;
+const IMAGE_Y = 1.3;
 
-const imageFiles = [
-  'dinacil.png',
-  'hydraulics.png',
-  'pedro.png',
-  'tekor.png',
-  'eastern.png',
-  'fundiciones.png',
-];
-const roomData = [
-  {
-    title: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo',
-    subtitle: 'C/Antoni Figueras ,91 Bloc B - 08551 Tona , Barcelona , España',
-    image: 'dinacil.png',
-  },
-  {
-    title: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.',
-    subtitle: 'C/Antoni Figueras , 91 Bloc B - 08551 Tona , Barcelona, España',
-    image: 'hydraulics.png',
-  },
-  {
-    title: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición',
-    subtitle: 'Ctra. Sant Hipòlit, 10 - ​08500 , Vic, Barcelona, España',
-    image: 'pedro.png',
-  },
-  {
-    title: 'Ubicada en Centelles- 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
-    subtitle: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra - 08540 , Centelles, Barcelona, España',
-    image: 'tekor.png',
-  },
-  {
-    title: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.',
-    subtitle: 'WDP Industrial Park / DN72 , Km. 3,2 - ​107025 Aricestii Rahtivani , Prahova , Romania',
-    image: 'eastern.png',
-  },
-  {
-    title: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.',
-    subtitle: 'C/ Disseminats, S/N - 08510, Roda de Ter, Barcelona, España',
-    image: 'fundiciones.png',
-  },
-];
 const loader = new THREE.TextureLoader();
+const cubes = []; // { mesh, index, prog }
+const labelTopPlanes = [];
+const labelBottomPlanes = [];
 
-const cubes      = [];  // { mesh, index, prog, baseScale }
-const labelPlanes = []; // mesh del cartell per cada cub
-
-for (let i = 0; i < imageFiles.length; i++) {
-  const angle = (i / 4) * Math.PI * 2;
+for (let i = 0; i < themes.length; i++) {
+  const angle = (i / themes.length) * Math.PI * 2;
   const x = Math.sin(angle) * RADIUS;
   const z = -Math.cos(angle) * RADIUS;
   const theme = themes[i];
 
-  const geo = new THREE.PlaneGeometry(1, 1);
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.8,
-    metalness: 0.0,
-    side: THREE.DoubleSide,
-  }));
-  const imageTex = loader.load(imageFiles[i], tex => {
-    const img = tex.image;
-    if (img && img.width && img.height) {
-      const aspect = img.width / img.height;
-      const baseWidth = IMAGE_HEIGHT * aspect;
-      mesh.scale.set(baseWidth, IMAGE_HEIGHT, 1);
-      mesh.userData.baseScale.set(baseWidth, IMAGE_HEIGHT, 1);
-    }
-  });
-  imageTex.encoding = THREE.sRGBEncoding;
-  imageTex.minFilter = THREE.LinearMipMapLinearFilter;
-  imageTex.magFilter = THREE.LinearFilter;
-  imageTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  imageTex.generateMipmaps = true;
-  mesh.material.map = imageTex;
-  mesh.material.needsUpdate = true;
-
-  mesh.position.set(x, CUBE_Y, z);
-  mesh.scale.set(IMAGE_HEIGHT, IMAGE_HEIGHT, 1);
-  mesh.userData.baseScale = new THREE.Vector3(IMAGE_HEIGHT, IMAGE_HEIGHT, 1);
-  mesh.lookAt(0, CUBE_Y, 0);
+  // Carrega imatge
+  const tex = loader.load(theme.img);
+  const mat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide });
+  const geo = new THREE.PlaneGeometry(IMAGE_WIDTH, IMAGE_HEIGHT);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, IMAGE_Y, z);
+  mesh.lookAt(0, IMAGE_Y, 0);
   hubGroup.add(mesh);
 
-  // ── Cartell: fons blanc, text negre ──
-  const labelCanvas = document.createElement('canvas');
-  labelCanvas.width = 512; labelCanvas.height = 180;
-  const lc = labelCanvas.getContext('2d');
+  // Etiqueta superior (text)
+  const tcanvas = document.createElement('canvas');
+  tcanvas.width = 1024; tcanvas.height = 256;
+  const tc = tcanvas.getContext('2d');
+  tc.fillStyle = 'rgba(255,255,255,0.98)';
+  tc.fillRect(0, 0, tcanvas.width, tcanvas.height);
+  tc.fillStyle = '#111111';
+  tc.font = '28px Arial';
+  tc.textAlign = 'center';
+  wrapText(tc, theme.text, tcanvas.width/2, 40, tcanvas.width-40, 34);
+  const ttex = new THREE.CanvasTexture(tcanvas);
+  const tmat = new THREE.MeshBasicMaterial({ map: ttex, transparent: true, side: THREE.DoubleSide });
+  const tmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), tmat);
+  tmesh.position.set(x, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, z);
+  tmesh.lookAt(0, IMAGE_Y + IMAGE_HEIGHT/2 + 0.35, 0);
+  tmat.opacity = 0;
+  hubGroup.add(tmesh);
 
-  // Fons blanc arrodonit
-  lc.fillStyle = '#ffffff';
-  const r = 30;
-  const w = 512, h = 180;
-  lc.beginPath();
-  lc.moveTo(r, 0);
-  lc.lineTo(w - r, 0); lc.quadraticCurveTo(w, 0, w, r);
-  lc.lineTo(w, h - r); lc.quadraticCurveTo(w, h, w - r, h);
-  lc.lineTo(r, h); lc.quadraticCurveTo(0, h, 0, h - r);
-  lc.lineTo(0, r); lc.quadraticCurveTo(0, 0, r, 0);
-  lc.closePath(); lc.fill();
-
-  // Text negre
-  lc.fillStyle = '#111111';
-  lc.font = 'bold 72px Arial';
-  lc.textAlign = 'center';
-  lc.textBaseline = 'middle';
-  lc.fillText(theme.label, w / 2, h / 2);
-
-  const labelTex = new THREE.CanvasTexture(labelCanvas);
-  const labelMat = new THREE.MeshBasicMaterial({
-    map: labelTex,
-    transparent: true,
-    opacity: 0,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.65, 0.23), labelMat);
-  labelMesh.position.set(x, CUBE_Y, z);
-  hubGroup.add(labelMesh);
+  // Etiqueta inferior (text2)
+  const bcanvas = document.createElement('canvas');
+  bcanvas.width = 1024; bcanvas.height = 160;
+  const bc = bcanvas.getContext('2d');
+  bc.fillStyle = 'rgba(255,255,255,0.98)';
+  bc.fillRect(0, 0, bcanvas.width, bcanvas.height);
+  bc.fillStyle = '#111111';
+  bc.font = '24px Arial';
+  bc.textAlign = 'center';
+  wrapText(bc, theme.text2, bcanvas.width/2, 34, bcanvas.width-40, 28);
+  const btex = new THREE.CanvasTexture(bcanvas);
+  const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
+  const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), bmat);
+  bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, z);
+  bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.25, 0);
+  bmat.opacity = 0;
+  hubGroup.add(bmesh);
 
   cubes.push({ mesh, index: i, prog: 0 });
-  labelPlanes.push(labelMesh);
+  labelTopPlanes.push(tmesh);
+  labelBottomPlanes.push(bmesh);
+}
+
+// util: dibuixa text amb salt de línia simple
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '';
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line + words[n] + ' ';
+    const metrics = ctx.measureText(testLine);
+    const testWidth = metrics.width;
+    if (testWidth > maxWidth && n > 0) {
+      ctx.fillText(line, x, y);
+      line = words[n] + ' ';
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, y);
 }
 
 // ─── SALA: buida, parets grises + terra negre (plans separats, sense z-fighting) ──
-let roomImageMesh = null;
-let roomTitleMesh = null;
-let roomSubtitleMesh = null;
-
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
@@ -451,6 +332,7 @@ function buildRoom(themeIndex) {
   const H = 4;     // alçada de la sala
 
   const FLOOR_COLOR = 0x0a0a0a;   // quasi negre
+  const WALL_COLOR  = 0x7a7a7a;   // gris mig
 
   // Terra ─ un sol PlaneGeometry, res més
   const floor = new THREE.Mesh(
@@ -461,50 +343,67 @@ function buildRoom(themeIndex) {
   floor.position.y = 0;
   roomGroup.add(floor);
 
-  roomGroup.add(new THREE.AmbientLight(0xffffff, 0.4));
-  const light = new THREE.PointLight(0xffffff, 1.2, 20);
+  // Sostre
+  const ceil = new THREE.Mesh(
+    new THREE.PlaneGeometry(R * 2, R * 2),
+    new THREE.MeshStandardMaterial({ color: 0x1a1a1a, side: THREE.BackSide })
+  );
+  ceil.rotation.x = -Math.PI / 2;
+  ceil.position.y = H;
+  roomGroup.add(ceil);
+
+  // 4 parets (plans individuals, cara visible cap endins)
+  const wallMat = new THREE.MeshStandardMaterial({ color: WALL_COLOR, side: THREE.BackSide });
+  const wallGeo = new THREE.PlaneGeometry(R * 2, H);
+
+  const wallConfigs = [
+    { pos: [0, H / 2, -R], rot: [0, 0, 0] },         // davant
+    { pos: [0, H / 2,  R], rot: [0, Math.PI, 0] },   // darrere
+    { pos: [-R, H / 2, 0], rot: [0, Math.PI / 2, 0] },  // esquerra
+    { pos: [ R, H / 2, 0], rot: [0, -Math.PI / 2, 0] }, // dreta
+  ];
+
+  wallConfigs.forEach(({ pos, rot }) => {
+    const wall = new THREE.Mesh(wallGeo, wallMat);
+    wall.position.set(...pos);
+    wall.rotation.set(...rot);
+    roomGroup.add(wall);
+  });
+
+  // Llum suau al centre de la sala
+  const light = new THREE.PointLight(0xffffff, 1.5, 20);
   light.position.set(0, H - 0.5, 0);
   roomGroup.add(light);
 
-  const data = roomData[themeIndex];
-  const tex = loader.load(data.image, t => {
-    t.encoding = THREE.sRGBEncoding;
-    t.minFilter = THREE.LinearMipMapLinearFilter;
-    t.magFilter = THREE.LinearFilter;
-    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    t.generateMipmaps = true;
-    if (roomImageMesh) {
-      const img = t.image;
-      if (img && img.width && img.height) {
-        const aspect = img.width / img.height;
-        const height = 3.0;
-        roomImageMesh.scale.set(height * aspect, height, 1);
-      }
-    }
-  });
+  // Cartell del nom de la sala a la paret del davant
+  const theme = themes[themeIndex];
+  const nc = document.createElement('canvas');
+  nc.width = 1024; nc.height = 256;
+  const nctx = nc.getContext('2d');
 
-  roomImageMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(1, 1),
-    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
-  );
-  roomImageMesh.position.set(0, 1.75, -2.5);
-  roomGroup.add(roomImageMesh);
+  // Fons blanc arrodonit
+  nctx.fillStyle = '#ffffff';
+  const rr = 40, ww = 1024, hh = 256;
+  nctx.beginPath();
+  nctx.moveTo(rr, 0); nctx.lineTo(ww - rr, 0); nctx.quadraticCurveTo(ww, 0, ww, rr);
+  nctx.lineTo(ww, hh - rr); nctx.quadraticCurveTo(ww, hh, ww - rr, hh);
+  nctx.lineTo(rr, hh); nctx.quadraticCurveTo(0, hh, 0, hh - rr);
+  nctx.lineTo(0, rr); nctx.quadraticCurveTo(0, 0, rr, 0);
+  nctx.closePath(); nctx.fill();
 
-  const titleTex = makeTextTexture(data.title, 1024, 280, 28);
-  roomTitleMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.8, 1.05),
-    new THREE.MeshBasicMaterial({ map: titleTex, transparent: true, side: THREE.DoubleSide, depthWrite: false })
-  );
-  roomTitleMesh.position.set(0, 3.4, -2.2);
-  roomGroup.add(roomTitleMesh);
+  nctx.fillStyle = '#111111';
+  nctx.font = 'bold 120px Arial';
+  nctx.textAlign = 'center';
+  nctx.textBaseline = 'middle';
+  nctx.fillText(theme.label, ww / 2, hh / 2);
 
-  const subtitleTex = makeTextTexture(data.subtitle, 1024, 180, 24);
-  roomSubtitleMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.8, 0.75),
-    new THREE.MeshBasicMaterial({ map: subtitleTex, transparent: true, side: THREE.DoubleSide, depthWrite: false })
+  const nTex = new THREE.CanvasTexture(nc);
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(3, 0.75),
+    new THREE.MeshBasicMaterial({ map: nTex, transparent: true, side: THREE.DoubleSide })
   );
-  roomSubtitleMesh.position.set(0, 0.65, -2.2);
-  roomGroup.add(roomSubtitleMesh);
+  sign.position.set(0, H * 0.7, -R + 0.05);
+  roomGroup.add(sign);
 }
 
 // ─── BOTÓ VR ──────────────────────────────────────────────────────────
@@ -635,21 +534,21 @@ function animate(time, frame) {
 
     for (let i = 0; i < cubes.length; i++) {
       const c = cubes[i];
-
-      // El pla es manté fix, sense girar
+      // Suau animació cap al focus
       const target = (i === looked) ? 1 : 0;
-      c.prog += (target - c.prog) * 0.1;
+      c.prog += (target - c.prog) * 0.12;
+      const s = 1 + (HOVER_SCALE - 1) * c.prog;
+      c.mesh.scale.setScalar(s);
 
-      const hoverScale = 1 + (HOVER_FACTOR - 1) * c.prog;
-      c.mesh.scale.copy(c.mesh.userData.baseScale).multiplyScalar(hoverScale);
-
-      // Cartell: surt cap amunt i apareix
-      const lp = labelPlanes[i];
-      const baseY  = CUBE_Y;
-      const floatY = CUBE_Y + 0.48;
-      lp.position.y = baseY + (floatY - baseY) * c.prog;
-      lp.material.opacity = c.prog;
-      lp.lookAt(_camPos2D.x, lp.position.y, _camPos2D.z);
+      // Labels: apareixen quan l'element està enfocat
+      const tp = labelTopPlanes[i];
+      const bp = labelBottomPlanes[i];
+      tp.position.y = IMAGE_Y + IMAGE_HEIGHT/2 + 0.35 + 0.12 * c.prog;
+      bp.position.y = IMAGE_Y - IMAGE_HEIGHT/2 - 0.25 - 0.06 * c.prog;
+      tp.material.opacity = c.prog;
+      bp.material.opacity = c.prog;
+      tp.lookAt(_camPos2D.x, tp.position.y, _camPos2D.z);
+      bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z);
     }
   }
 
