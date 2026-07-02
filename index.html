@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Roquet AR</title>
+<title>Roquet VR</title>
 <style>
   html, body {
     margin: 0; padding: 0;
@@ -55,10 +55,10 @@
 </head>
 <body>
 <div id="overlay">
-  <h2>Sales AR — Quest 3</h2>
+  <h2>Sales VR — Quest 3</h2>
   <div id="status">Carregant...</div>
 </div>
-<div id="controllerInfo">Mandos: esperant sessió AR...</div>
+<div id="controllerInfo">Mandos: esperant sessió VR...</div>
 <div id="hud">
   <img class="logo" src="roquet.png" alt="Roquet">
   <svg class="controller" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
@@ -94,16 +94,13 @@
 
 <script type="module">
 import * as THREE from 'three';
-import { ARButton } from 'three/addons/webxr/ARButton.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ─── RENDER ────────────────────────────────────────────────────────────
-// alpha:true + setClearColor(0,0) són imprescindibles perquè el canvas
-// no pinti cap fons sòlid i es vegi la càmera de passthrough del Quest 3.
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x000000, 0);
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 renderer.xr.addEventListener('sessionend', () => {
@@ -112,7 +109,8 @@ renderer.xr.addEventListener('sessionend', () => {
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = null; // sense fons: es veu l'habitació real
+// El fons ja no és passthrough ni negre pla: el model room.glb fa de fons/entorn.
+scene.background = new THREE.Color(0x0a0a0a);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
 
@@ -279,18 +277,56 @@ function makeRoomPreviewTexture(theme) {
   return canvas;
 }
 
+// ─── FONS DE L'ESCENA: room.glb com a entorn envoltant ─────────────────
+// Carreguem el model escanejat de la sala UNA sola vegada i el deixem fix
+// al món (no enganxat a la càmera), fent de "fons" per a tota l'experiència
+// (tant el hub com les sales de cada subsidiària).
+const ROOM_TARGET_HEIGHT = 3.0; // alçada aproximada de sostre en metres; ajusta si cal
+
+function loadRoomBackground() {
+  const glLoader = new GLTFLoader();
+  glLoader.load(
+    'room.glb',
+    (gltf) => {
+      const model = gltf.scene;
+
+      model.traverse((obj) => {
+        if (obj.isMesh && obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach((m) => { m.side = THREE.DoubleSide; });
+        }
+      });
+
+      // Escalem segons l'alçada real del model perquè la sala tingui una
+      // mida humana versemblant, i posem el terra a y=0.
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const height = size.y || 1;
+      const scale = ROOM_TARGET_HEIGHT / height;
+      model.scale.setScalar(scale);
+
+      box.setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.x -= center.x;
+      model.position.z -= center.z;
+      model.position.y -= box.min.y; // el punt més baix toca y=0 (terra)
+
+      scene.add(model);
+    },
+    undefined,
+    (error) => {
+      console.error('No s’ha pogut carregar room.glb', error);
+      const s = document.getElementById('status');
+      if (s) { s.textContent = 'No s’ha pogut carregar room.glb (fons)'; s.style.color = '#f66'; }
+    }
+  );
+}
+loadRoomBackground();
+
 // ─── HUB: sala inicial amb 6 imatges ─────────────────────────────────────
 const hubGroup = new THREE.Group();
 scene.add(hubGroup);
-
-// En AR/passthrough NO dibuixem cap terra opac: volem veure el terra real
-// de l'habitació de l'usuari a través de les Quest 3. Deixem només una
-// graella molt subtil i semitransparent com a referència espacial opcional.
-const gridMat = new THREE.LineBasicMaterial({ color: 0x4a90ff, transparent: true, opacity: 0.15 });
-const grid = new THREE.GridHelper(30, 30, 0x4a90ff, 0x4a90ff);
-grid.material = gridMat;
-grid.position.y = 0.001;
-hubGroup.add(grid);
 
 // ── Imatges ──
 const IMAGE_WIDTH = 1.2;
@@ -407,18 +443,13 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   ctx.fillText(line, x, y);
 }
 
-// ─── SALA: model escanejat com a escena augmentada, no com a fons ──
+// ─── SALA: continguts flotants (labels) sobre el fons room.glb ──
+// room.glb ja s'ha carregat com a fons global de tota l'escena (veure
+// loadRoomBackground() més amunt), així que aquí només gestionem els
+// elements flotants propis de cada sala (etiquetes Historia/Productes/Grup).
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
-
-const augmentedRoomGroup = new THREE.Group();
-augmentedRoomGroup.visible = false;
-camera.add(augmentedRoomGroup);
-augmentedRoomGroup.position.set(0, -0.35, -2.0);
-
-let roomAsset = null;
-let roomAssetPromise = null;
 
 function clearGroup(g, preserveKey = '') {
   while (g.children.length) {
@@ -433,75 +464,8 @@ function clearGroup(g, preserveKey = '') {
   }
 }
 
-function ensureRoomEnvironment() {
-  if (roomAsset) return Promise.resolve(roomAsset);
-  if (roomAssetPromise) return roomAssetPromise;
-
-  roomAssetPromise = new Promise((resolve, reject) => {
-    const loader = new GLTFLoader();
-    loader.load(
-      'room.glb',
-      (gltf) => {
-        const model = gltf.scene;
-
-        model.traverse((obj) => {
-          if (obj.isMesh) {
-            if (obj.material) {
-              const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-              mats.forEach((m) => {
-                m.side = THREE.DoubleSide;
-                m.depthWrite = true;
-                m.depthTest = true;
-              });
-            }
-            obj.castShadow = false;
-            obj.receiveShadow = false;
-          }
-          obj.userData.preserveRoomAsset = true;
-        });
-
-        const box = new THREE.Box3().setFromObject(model);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z) || 1;
-        const scale = 1.4 / maxDim;
-        model.scale.setScalar(scale);
-
-        box.setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-        model.position.copy(center).multiplyScalar(-1);
-        model.rotation.set(0, Math.PI, 0);
-
-        augmentedRoomGroup.clear();
-        augmentedRoomGroup.add(model);
-        augmentedRoomGroup.visible = true;
-        roomAsset = model;
-        resolve(model);
-      },
-      undefined,
-      (error) => {
-        console.error('No s’ha pogut carregar room.glb', error);
-        roomAssetPromise = null;
-        reject(error);
-      }
-    );
-  });
-
-  return roomAssetPromise;
-}
-
-
 function buildRoom(themeIndex) {
-  clearGroup(roomGroup, 'preserveRoomAsset');
-
-  ensureRoomEnvironment().catch(() => {});
-
-  // El model escanejat de l’habitació apareix com a objecte augmentat davant de l’usuari.
-  if (roomAsset) {
-    augmentedRoomGroup.clear();
-    augmentedRoomGroup.add(roomAsset);
-    augmentedRoomGroup.visible = true;
-  }
+  clearGroup(roomGroup);
 
   // Labels dins la sala: Historia, Productes, Grup
   roomLabels.length = 0;
@@ -542,34 +506,33 @@ function buildRoom(themeIndex) {
   }
 }
 
-// ─── BOTÓ AR (REALITAT AUGMENTADA / PASSTHROUGH) ──────────────────────
+// ─── BOTÓ VR ──────────────────────────────────────────────────────────
 const statusEl = document.getElementById('status');
-statusEl.textContent = 'Three.js carregat. Comprovant suport de realitat augmentada...';
+statusEl.textContent = 'Three.js carregat. Comprovant suport VR...';
 
 if (navigator.xr) {
   let resolved = false;
   setTimeout(() => {
     if (!resolved) {
-      statusEl.textContent = 'La comprovació AR triga massa. Prova de recarregar.';
+      statusEl.textContent = 'La comprovació VR triga massa. Prova de recarregar.';
       statusEl.style.color = '#fa0';
     }
   }, 5000);
 
-  navigator.xr.isSessionSupported('immersive-ar').then(supported => {
+  navigator.xr.isSessionSupported('immersive-vr').then(supported => {
     resolved = true;
     if (supported) {
-      statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó per entrar en AR.';
-      const btn = ARButton.createButton(renderer, {
-        requiredFeatures: ['local-floor'],
-        optionalFeatures: ['bounded-floor', 'hand-tracking', 'layers']
+      statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó.';
+      const btn = VRButton.createButton(renderer, {
+        optionalFeatures: ['local-floor', 'bounded-floor']
       });
       document.body.appendChild(btn);
     } else {
-      statusEl.textContent = 'Realitat augmentada (passthrough) no suportada en aquest dispositiu/navegador.';
+      statusEl.textContent = 'VR immersiu no suportat. Obre per HTTPS amb el Meta Quest Browser.';
     }
   }).catch(err => {
     resolved = true;
-    statusEl.textContent = 'Error AR: ' + err.message;
+    statusEl.textContent = 'Error VR: ' + err.message;
     statusEl.style.color = '#f66';
   });
 } else {
