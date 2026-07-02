@@ -740,22 +740,16 @@ function exitRoom() {
   loadRoomBackground('room.glb');
   state = 'hub';
 }
-
-// ─── CONTROLADORS ─────────────────────────────────────────────────────
 const infoEl = document.getElementById('controllerInfo');
 
 function handleInput(frame) {
   const session = renderer.xr.getSession();
   if (!session) return;
-
   const refSpace = renderer.xr.getReferenceSpace();
   let infoText = 'Posició dels mandos:\n';
   let anyController = false;
-
   for (const src of session.inputSources) {
     if (!src.gamepad) continue;
-
-    // Posició
     if (frame && refSpace) {
       const space = src.gripSpace || src.targetRaySpace;
       if (space) {
@@ -768,8 +762,6 @@ function handleInput(frame) {
         }
       }
     }
-
-    // Botons (mando dret)
     if (src.handedness !== 'right') continue;
     const gp = src.gamepad;
     const aPressed = gp.buttons[4]?.pressed;
@@ -782,10 +774,8 @@ function handleInput(frame) {
         const idx = getLookedCube();
         if (idx !== -1) enterRoom(idx);
       } else if (state === 'room') {
-        // in-room: check looked room label
         const ridx = getLookedRoomLabel();
         if (ridx !== -1) {
-          // open floating window at label
           openLabelWindow(ridx);
         }
       }
@@ -794,7 +784,6 @@ function handleInput(frame) {
       if (guideOverlayVisible) {
         hideGuideOverlay();
       } else if (state === 'room') {
-        // if a floating window is open, close it first
         if (roomWindow) {
           roomGroup.remove(roomWindow);
           roomWindow.geometry?.dispose();
@@ -808,11 +797,8 @@ function handleInput(frame) {
     buttonStates.a = aPressed;
     buttonStates.b = bPressed;
   }
-
   infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
-
-// ─── LOOP D'ANIMACIÓ ──────────────────────────────────────────────────
 const _camPos2D = new THREE.Vector3();
 
 function detectHeadsetResumeFromFrameGap(time, frame) {
@@ -827,18 +813,13 @@ function detectHeadsetResumeFromFrameGap(time, frame) {
   }
   lastXRFrameTime = time;
 }
-
 function animate(time, frame) {
   detectHeadsetResumeFromFrameGap(time, frame);
-
   if (state === 'hub') {
     camera.getWorldPosition(_camPos2D);
-
     const looked = getLookedCube();
-
     for (let i = 0; i < cubes.length; i++) {
       const c = cubes[i];
-      // Suau animació cap al focus
       const target = (i === looked) ? 1 : 0;
       c.prog += (target - c.prog) * 0.12;
       const s = 1 + (HOVER_SCALE - 1) * c.prog;
