@@ -132,6 +132,7 @@ const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+scene.add(camera);
 
 const guideOverlayGroup = new THREE.Group();
 camera.add(guideOverlayGroup);
