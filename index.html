@@ -108,7 +108,7 @@ renderer.xr.addEventListener('sessionend', () => {
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a2e);
+scene.background = null;
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
 
@@ -435,35 +435,39 @@ function ensureRoomEnvironment() {
     loader.load(
       'room.glb',
       (gltf) => {
-        const sky = gltf.scene;
+        const model = gltf.scene;
 
-        // 👉 IMPORTANT: Invertir normals perquè es vegi des de dins
-        sky.traverse((obj) => {
+        model.traverse((obj) => {
           if (obj.isMesh) {
             if (obj.material) {
               const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
               mats.forEach((m) => {
-                m.side = THREE.BackSide;   // 🔥 El més important
-                m.depthWrite = false;      // Evita problemes de z-buffer
+                m.side = THREE.DoubleSide;
+                m.depthWrite = true;
+                m.depthTest = true;
               });
             }
-
-            // Un skybox NO necessita ombres
             obj.castShadow = false;
             obj.receiveShadow = false;
           }
-
           obj.userData.preserveRoomAsset = true;
         });
 
-        // 👉 Escala del skybox (gran)
-        sky.scale.set(50, 50, 50);
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z) || 1;
+        const scale = 6 / maxDim;
+        model.scale.setScalar(scale);
 
-        // 👉 Centrat a l'origen
-        sky.position.set(0, 0, 0);
+        box.setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.copy(center).multiplyScalar(-1);
+        model.rotation.set(0, 0, 0);
 
-        roomAsset = sky;
-        resolve(sky);
+        roomGroup.add(model);
+        roomAsset = model;
+        resolve(model);
       },
       undefined,
       (error) => {
@@ -481,55 +485,11 @@ function ensureRoomEnvironment() {
 function buildRoom(themeIndex) {
   clearGroup(roomGroup, 'preserveRoomAsset');
 
-  ensureRoomEnvironment().then((model) => {
-    if (!roomGroup.children.includes(model)) {
-      roomGroup.add(model);
-    }
-  }).catch(() => {});
+  ensureRoomEnvironment().catch(() => {});
 
-  const R = 6;     // mig costat de la sala (12x12m)
-  const H = 4;     // alçada de la sala
+  const H = 4;
 
-  const FLOOR_COLOR = 0x0a0a0a;   // quasi negre
-  const WALL_COLOR  = 0x7a7a7a;   // gris mig
-
-  // Terra ─ un sol PlaneGeometry, res més
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(R * 2, R * 2),
-    new THREE.MeshStandardMaterial({ color: FLOOR_COLOR })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = 0;
-  roomGroup.add(floor);
-
-  // Sostre
-  const ceil = new THREE.Mesh(
-    new THREE.PlaneGeometry(R * 2, R * 2),
-    new THREE.MeshStandardMaterial({ color: 0x1a1a1a, side: THREE.BackSide })
-  );
-  ceil.rotation.x = -Math.PI / 2;
-  ceil.position.y = H;
-  roomGroup.add(ceil);
-
-  // 4 parets (plans individuals, cara visible cap endins)
-  const wallMat = new THREE.MeshStandardMaterial({ color: WALL_COLOR, side: THREE.BackSide });
-  const wallGeo = new THREE.PlaneGeometry(R * 2, H);
-
-  const wallConfigs = [
-    { pos: [0, H / 2, -R], rot: [0, 0, 0] },         // davant
-    { pos: [0, H / 2,  R], rot: [0, Math.PI, 0] },   // darrere
-    { pos: [-R, H / 2, 0], rot: [0, Math.PI / 2, 0] },  // esquerra
-    { pos: [ R, H / 2, 0], rot: [0, -Math.PI / 2, 0] }, // dreta
-  ];
-
-  wallConfigs.forEach(({ pos, rot }) => {
-    const wall = new THREE.Mesh(wallGeo, wallMat);
-    wall.position.set(...pos);
-    wall.rotation.set(...rot);
-    roomGroup.add(wall);
-  });
-
-  // Llum suau al centre de la sala
+  // El model escanejat de l’habitació és l’entorn real. No afegim parets ni terra procedurals.
   const light = new THREE.PointLight(0xffffff, 1.5, 20);
   light.position.set(0, H - 0.5, 0);
   roomGroup.add(light);
@@ -821,11 +781,11 @@ function animate(time, frame) {
   handleInput(frame);
   renderer.render(scene, camera);
 }
-ensureRoomEnvironment().then((sky) => {
-  scene.add(sky);
+
+renderer.setAnimationLoop(() => {
+  renderer.render(scene, camera);
 });
 
-renderer.setAnimationLoop(animate);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
