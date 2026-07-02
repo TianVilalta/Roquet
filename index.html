@@ -208,22 +208,22 @@ const ctrlMesh = new THREE.Mesh(
 const themes = [
   { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png',
     text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo',
-    text2: 'C/Antoni Figueras ,91 Bloc B                                     08551 Tona , Barcelona , España' },
+    text2: '08551 Tona , Barcelona , España' },
   { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png',
     text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.',
-    text2: 'C/Antoni Figueras , 91 Bloc B                                     08551 Tona , Barcelona, España' },
+    text2: '08551 Tona , Barcelona, España' },
   { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png',
     text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición',
-    text2: 'Ctra. Sant Hipòlit, 10                                            ​08500 , Vic, Barcelona, España' },
+    text2: '08510, Roda de Ter, Barcelona, España' },
   { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png',
     text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
     text2: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra                                                                      08540 , Centelles, Barcelona, España' },
   { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png',
     text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.',
-    text2: 'WDP Industrial Park / DN72 , Km. 3,2                              ​107025 Aricestii Rahtivani , Prahova , Romania' },
+    text2: '​107025 Aricestii Rahtivani , Prahova , Romania' },
   { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png',
     text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.',
-    text2: 'C/ Disseminats, S/N                                              08510, Roda de Ter, Barcelona, España' },
+    text2: '​08500 , Vic, Barcelona, España' },
 ];
 
 // ─── TEXTURA DIFUMINADA DEL INTERIOR DE CADA SALA ─────────────────────
@@ -313,29 +313,32 @@ function loadRoomBackground() {
       model.traverse((obj) => {
         if (obj.isMesh && obj.material) {
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-          mats.forEach((m) => {
-            // DoubleSide és clau: com que la càmera queda DINS del model
-            // (és el fons/entorn que ens envolta), amb FrontSide les cares
-            // interiors es descarten (backface culling) i es veuen com a
-            // forats completament negres. Amb DoubleSide es veuen sempre.
-            m.side = THREE.DoubleSide;
-            m.depthWrite = true;
-            m.depthTest = true;
-            m.transparent = false;
-            m.alphaTest = 0;
-            // Si el material és PBR (metalness/roughness), assegurem que
-            // aprofita l'envMap de l'escena i no queda negre.
-            if ('envMapIntensity' in m) m.envMapIntensity = 1.0;
-            m.needsUpdate = true;
-            if (m.map) {
-              m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
-              m.map.colorSpace = THREE.SRGBColorSpace;
-              m.map.needsUpdate = true;
+          const newMats = mats.map((m) => {
+            // El room.glb és un escaneig/bake: la llum i les ombres de la
+            // sala real ja estan "cuinades" dins la textura de color. Si el
+            // material és PBR (MeshStandardMaterial) i li apliquem a sobre
+            // les llums de l'escena + l'envMap, cada cara reacciona de
+            // manera diferent segons el seu normal → algunes zones queden
+            // sobreexposades (molt clares) i d'altres, mal orientades
+            // respecte la llum, queden fosques. La solució és renderitzar
+            // aquest model com a "unlit": mostrem la textura tal qual,
+            // sense que cap llum de l'escena hi interactuï.
+            const basic = new THREE.MeshBasicMaterial({
+              map: m.map || null,
+              color: m.map ? 0xffffff : (m.color || 0xffffff),
+              side: THREE.DoubleSide,
+              transparent: !!m.transparent,
+              opacity: m.opacity !== undefined ? m.opacity : 1,
+            });
+            if (basic.map) {
+              basic.map.colorSpace = THREE.SRGBColorSpace;
+              basic.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+              basic.map.needsUpdate = true;
             }
-            if (m.emissiveMap) {
-              m.emissiveMap.needsUpdate = true;
-            }
+            m.dispose();
+            return basic;
           });
+          obj.material = Array.isArray(obj.material) ? newMats : newMats[0];
         }
       });
 
