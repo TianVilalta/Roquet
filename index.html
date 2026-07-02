@@ -137,6 +137,8 @@ camera.add(guideOverlayGroup);
 guideOverlayGroup.position.set(0, 0, -1.4);
 let guideOverlayVisible = true;
 let headsetVisibilityHandlerAttached = false;
+let lastXRFrameTime = null;
+const HEADSET_OFF_FRAME_GAP_MS = 1000;
 
 function showGuideOverlay() {
   guideOverlayGroup.visible = true;
@@ -153,10 +155,21 @@ function resetToHubWithGuide() {
   showGuideOverlay();
 }
 
+function markHeadsetOffOrPaused() {
+  resetToHubWithGuide();
+  lastXRFrameTime = null;
+}
+
 function onHeadsetVisibilityChange(event) {
   const state = event?.session?.visibilityState || renderer.xr.getSession()?.visibilityState;
   if (state === 'hidden' || state === 'visible' || state === 'visible-blurred') {
-    resetToHubWithGuide();
+    markHeadsetOffOrPaused();
+  }
+}
+
+function onDocumentVisibilityChange() {
+  if (document.visibilityState === 'visible' || document.visibilityState === 'hidden') {
+    markHeadsetOffOrPaused();
   }
 }
 
@@ -164,6 +177,7 @@ function attachHeadsetVisibilityHandler() {
   const session = renderer.xr.getSession();
   if (!session || headsetVisibilityHandlerAttached) return;
   session.addEventListener('visibilitychange', onHeadsetVisibilityChange);
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange);
   headsetVisibilityHandlerAttached = true;
 }
 
@@ -172,7 +186,9 @@ function detachHeadsetVisibilityHandler() {
   if (session) {
     session.removeEventListener('visibilitychange', onHeadsetVisibilityChange);
   }
+  document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
   headsetVisibilityHandlerAttached = false;
+  lastXRFrameTime = null;
 }
 
 new THREE.TextureLoader().load('roquet.png', (tex) => {
@@ -758,6 +774,7 @@ function handleInput(frame) {
     const gp = src.gamepad;
     const aPressed = gp.buttons[4]?.pressed;
     const bPressed = gp.buttons[5]?.pressed;
+
     if (aPressed && !buttonStates.a) {
       if (guideOverlayVisible) {
         hideGuideOverlay();
@@ -765,8 +782,10 @@ function handleInput(frame) {
         const idx = getLookedCube();
         if (idx !== -1) enterRoom(idx);
       } else if (state === 'room') {
+        // in-room: check looked room label
         const ridx = getLookedRoomLabel();
         if (ridx !== -1) {
+          // open floating window at label
           openLabelWindow(ridx);
         }
       }
@@ -775,6 +794,7 @@ function handleInput(frame) {
       if (guideOverlayVisible) {
         hideGuideOverlay();
       } else if (state === 'room') {
+        // if a floating window is open, close it first
         if (roomWindow) {
           roomGroup.remove(roomWindow);
           roomWindow.geometry?.dispose();
@@ -788,16 +808,37 @@ function handleInput(frame) {
     buttonStates.a = aPressed;
     buttonStates.b = bPressed;
   }
+
   infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
+
+// ─── LOOP D'ANIMACIÓ ──────────────────────────────────────────────────
 const _camPos2D = new THREE.Vector3();
 
+function detectHeadsetResumeFromFrameGap(time, frame) {
+  const session = renderer.xr.getSession();
+  if (!session || !frame) {
+    lastXRFrameTime = null;
+    return;
+  }
+
+  if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) {
+    resetToHubWithGuide();
+  }
+  lastXRFrameTime = time;
+}
+
 function animate(time, frame) {
+  detectHeadsetResumeFromFrameGap(time, frame);
+
   if (state === 'hub') {
     camera.getWorldPosition(_camPos2D);
+
     const looked = getLookedCube();
+
     for (let i = 0; i < cubes.length; i++) {
       const c = cubes[i];
+      // Suau animació cap al focus
       const target = (i === looked) ? 1 : 0;
       c.prog += (target - c.prog) * 0.12;
       const s = 1 + (HOVER_SCALE - 1) * c.prog;
