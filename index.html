@@ -217,7 +217,7 @@ const themes = [
     text2: '08510, Roda de Ter, Barcelona, España' },
   { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png',
     text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
-    text2: '08540 , Centelles, Barcelona, España' },
+    text2: 'Ronda de la Font Grossa 26, Pol. Ind. La Gavarra                                                                      08540 , Centelles, Barcelona, España' },
   { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png',
     text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.',
     text2: '​107025 Aricestii Rahtivani , Prahova , Romania' },
@@ -297,31 +297,32 @@ function makeRoomPreviewTexture(theme) {
   return canvas;
 }
 
-// ─── FONS DE L'ESCENA: GLB de fons per a cada sala ─────────────────────
+// ─── FONS DE L'ESCENA: room.glb com a entorn envoltant ─────────────────
 // Carreguem el model escanejat de la sala UNA sola vegada i el deixem fix
-// al món (no enganxat a la càmera), fent de "fons" per a tota l'experiència.
-const ROOM_TARGET_HEIGHT = 12.0;
-const backgroundGroup = new THREE.Group();
-scene.add(backgroundGroup);
+// al món (no enganxat a la càmera), fent de "fons" per a tota l'experiència
+// (tant el hub com les sales de cada subsidiària).
+const ROOM_TARGET_HEIGHT = 12.0; // més gran perquè l'habitació de fons sembli més gran
 
-function getThemeBackgroundAsset(theme) {
-  if (!theme?.img) return 'room.glb';
-  return theme.img.replace(/\.[^.]+$/, '.glb');
-}
-
-function loadRoomBackground(assetPath = 'room.glb') {
+function loadRoomBackground() {
   const glLoader = new GLTFLoader();
   glLoader.load(
-    assetPath,
+    'room.glb',
     (gltf) => {
       const model = gltf.scene;
-
-      clearGroup(backgroundGroup);
 
       model.traverse((obj) => {
         if (obj.isMesh && obj.material) {
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
           const newMats = mats.map((m) => {
+            // El room.glb és un escaneig/bake: la llum i les ombres de la
+            // sala real ja estan "cuinades" dins la textura de color. Si el
+            // material és PBR (MeshStandardMaterial) i li apliquem a sobre
+            // les llums de l'escena + l'envMap, cada cara reacciona de
+            // manera diferent segons el seu normal → algunes zones queden
+            // sobreexposades (molt clares) i d'altres, mal orientades
+            // respecte la llum, queden fosques. La solució és renderitzar
+            // aquest model com a "unlit": mostrem la textura tal qual,
+            // sense que cap llum de l'escena hi interactuï.
             const basic = new THREE.MeshBasicMaterial({
               map: m.map || null,
               color: m.map ? 0xffffff : (m.color || 0xffffff),
@@ -341,6 +342,8 @@ function loadRoomBackground(assetPath = 'room.glb') {
         }
       });
 
+      // Escalem segons l'alçada real del model perquè la sala tingui una
+      // mida humana versemblant, i posem el terra a y=0.
       const box = new THREE.Box3().setFromObject(model);
       const size = new THREE.Vector3();
       box.getSize(size);
@@ -348,6 +351,7 @@ function loadRoomBackground(assetPath = 'room.glb') {
       const scale = ROOM_TARGET_HEIGHT / height;
       model.scale.setScalar(scale);
 
+      // Recalculem la caixa després de l'escalat
       box.setFromObject(model);
       const center = box.getCenter(new THREE.Vector3());
       model.position.x -= center.x;
@@ -356,13 +360,13 @@ function loadRoomBackground(assetPath = 'room.glb') {
       model.position.y -= 3;
       model.rotation.y = Math.PI;
 
-      backgroundGroup.add(model);
+      scene.add(model);
     },
     undefined,
     (error) => {
-      console.error(`No s'ha pogut carregar ${assetPath}`, error);
+      console.error("No s'ha pogut carregar room.glb", error);
       const s = document.getElementById('status');
-      if (s) { s.textContent = `No s'ha pogut carregar ${assetPath} (fons)`; s.style.color = '#f66'; }
+      if (s) { s.textContent = "No s'ha pogut carregar room.glb (fons)"; s.style.color = '#f66'; }
     }
   );
 }
@@ -510,11 +514,6 @@ function clearGroup(g, preserveKey = '') {
 
 function buildRoom(themeIndex) {
   clearGroup(roomGroup);
-
-  const theme = themes[themeIndex];
-  if (theme) {
-    loadRoomBackground(getThemeBackgroundAsset(theme));
-  }
 
   // Labels dins la sala: Historia, Productes, Grup
   roomLabels.length = 0;
@@ -791,6 +790,8 @@ function animate(time, frame) {
 renderer.setAnimationLoop((time, frame) => {
   animate(time, frame);
 });
+
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
