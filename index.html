@@ -293,7 +293,21 @@ function loadRoomBackground() {
       model.traverse((obj) => {
         if (obj.isMesh && obj.material) {
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-          mats.forEach((m) => { m.side = THREE.DoubleSide; });
+          mats.forEach((m) => {
+            m.side = THREE.FrontSide;
+            m.depthWrite = true;
+            m.depthTest = true;
+            m.transparent = false;
+            m.alphaTest = 0;
+            m.needsUpdate = true;
+            if (m.map) {
+              m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+              m.map.needsUpdate = true;
+            }
+            if (m.emissiveMap) {
+              m.emissiveMap.needsUpdate = true;
+            }
+          });
         }
       });
 
@@ -311,8 +325,9 @@ function loadRoomBackground() {
       const center = box.getCenter(new THREE.Vector3());
       model.position.x -= center.x;
       model.position.z -= center.z;
-      model.position.y -= box.min.y; // el punt més baix toca y=0 (terra)
-      model.position.y -= 5; // mou el fons una mica més avall
+      model.position.y -= box.min.y;
+      model.position.y -= 3;
+      model.rotation.y = Math.PI;
 
       scene.add(model);
     },
