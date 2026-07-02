@@ -95,6 +95,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ─── RENDER ────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -409,10 +410,15 @@ const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
 
-function clearGroup(g) {
+let roomAsset = null;
+let roomAssetPromise = null;
+
+function clearGroup(g, preserveKey = '') {
   while (g.children.length) {
     const c = g.children[0];
     g.remove(c);
+    const shouldPreserve = preserveKey && c.userData?.[preserveKey];
+    if (shouldPreserve) continue;
     c.geometry?.dispose();
     if (c.material) {
       (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose());
@@ -420,8 +426,66 @@ function clearGroup(g) {
   }
 }
 
+function ensureRoomEnvironment() {
+  if (roomAsset) return Promise.resolve(roomAsset);
+  if (roomAssetPromise) return roomAssetPromise;
+
+  roomAssetPromise = new Promise((resolve, reject) => {
+    const loader = new GLTFLoader();
+    loader.load(
+      'room.glb',
+      (gltf) => {
+        const sky = gltf.scene;
+
+        // 👉 IMPORTANT: Invertir normals perquè es vegi des de dins
+        sky.traverse((obj) => {
+          if (obj.isMesh) {
+            if (obj.material) {
+              const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+              mats.forEach((m) => {
+                m.side = THREE.BackSide;   // 🔥 El més important
+                m.depthWrite = false;      // Evita problemes de z-buffer
+              });
+            }
+
+            // Un skybox NO necessita ombres
+            obj.castShadow = false;
+            obj.receiveShadow = false;
+          }
+
+          obj.userData.preserveRoomAsset = true;
+        });
+
+        // 👉 Escala del skybox (gran)
+        sky.scale.set(50, 50, 50);
+
+        // 👉 Centrat a l'origen
+        sky.position.set(0, 0, 0);
+
+        roomAsset = sky;
+        resolve(sky);
+      },
+      undefined,
+      (error) => {
+        console.error('No s’ha pogut carregar room.glb', error);
+        roomAssetPromise = null;
+        reject(error);
+      }
+    );
+  });
+
+  return roomAssetPromise;
+}
+
+
 function buildRoom(themeIndex) {
-  clearGroup(roomGroup);
+  clearGroup(roomGroup, 'preserveRoomAsset');
+
+  ensureRoomEnvironment().then((model) => {
+    if (!roomGroup.children.includes(model)) {
+      roomGroup.add(model);
+    }
+  }).catch(() => {});
 
   const R = 6;     // mig costat de la sala (12x12m)
   const H = 4;     // alçada de la sala
@@ -757,6 +821,9 @@ function animate(time, frame) {
   handleInput(frame);
   renderer.render(scene, camera);
 }
+ensureRoomEnvironment().then((sky) => {
+  scene.add(sky);
+});
 
 renderer.setAnimationLoop(animate);
 
