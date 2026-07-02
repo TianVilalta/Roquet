@@ -48,7 +48,6 @@
     flex-direction: column;
     align-items: center;
   }
-  #hud img.logo { height: 28px; margin-bottom: 6px; }
   #hud .controller { width: 220px; height: 64px; }
   canvas { display: block; }
 </style>
@@ -60,7 +59,6 @@
 </div>
 <div id="controllerInfo">Mandos: esperant sessió VR...</div>
 <div id="hud">
-  <img class="logo" src="roquet.png" alt="Roquet">
   <svg class="controller" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
     <rect x="10" y="20" width="380" height="80" rx="18" fill="#222" stroke="#444"/>
     <circle cx="280" cy="60" r="18" fill="#0b0" />
@@ -219,20 +217,6 @@ const hudBg = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 })
 );
 hud3D.add(hudBg);
-
-// carreguem logo i el posem a l'esquerra superior del panel
-const texLoader = new THREE.TextureLoader();
-texLoader.load('roquet.png', (tex) => {
-  const w = 0.18;
-  const aspect = (tex.image && tex.image.width) ? (tex.image.width / tex.image.height) : 2;
-  const h = w / aspect;
-  const logo = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, h),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true })
-  );
-  logo.position.set(-0.09, 0.02, 0.01);
-  hud3D.add(logo);
-});
 
 // dibuixem el controlador en un canvas i el convertim a textura
 const ctrlCanvas = document.createElement('canvas');
@@ -507,11 +491,20 @@ for (let i = 0; i < themes.length; i++) {
   hubGroup.add(bmesh);
 
   // Carrega imatge i ajusta aspect ratio (ample = meitat d'IMAGE_WIDTH)
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }));
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(1,1),
+    new THREE.MeshBasicMaterial({
+      transparent: true,
+      alphaTest: 0.02,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    })
+  );
   mesh.position.set(x, IMAGE_Y, z);
   mesh.lookAt(0, IMAGE_Y, 0);
   hubGroup.add(mesh);
   loader.load(theme.img, (texLoaded) => {
+    texLoaded.colorSpace = THREE.SRGBColorSpace;
     mesh.material.map = texLoaded;
     mesh.material.needsUpdate = true;
     const iw = texLoaded.image?.naturalWidth || texLoaded.image?.width || 1024;
@@ -759,6 +752,8 @@ function handleInput(frame) {
         }
       }
     }
+
+    // Botons (mando dret)
     if (src.handedness !== 'right') continue;
     const gp = src.gamepad;
     const aPressed = gp.buttons[4]?.pressed;
@@ -800,26 +795,20 @@ const _camPos2D = new THREE.Vector3();
 function animate(time, frame) {
   if (state === 'hub') {
     camera.getWorldPosition(_camPos2D);
-
     const looked = getLookedCube();
-
     for (let i = 0; i < cubes.length; i++) {
       const c = cubes[i];
-      // Suau animació cap al focus
       const target = (i === looked) ? 1 : 0;
       c.prog += (target - c.prog) * 0.12;
       const s = 1 + (HOVER_SCALE - 1) * c.prog;
       c.mesh.scale.setScalar(s);
       const camPos3 = new THREE.Vector3(); camera.getWorldPosition(camPos3);
       c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
-
-      // Labels: apareixen quan l'element està enfocat; usem l'altura real de la imatge
       const bp = labelBottomPlanes[i];
       const geoH = (c.mesh.geometry && c.mesh.geometry.parameters && c.mesh.geometry.parameters.height) ? c.mesh.geometry.parameters.height : IMAGE_HEIGHT;
       const bottomBaseOffset = 0.12;
       const botY = IMAGE_Y - geoH / 2 - bottomBaseOffset;
       bp.position.y = botY;
-      // keep text at same distance as the image
       const imgPos = c.mesh.position.clone();
       bp.position.x = imgPos.x;
       bp.position.z = imgPos.z;
@@ -831,7 +820,6 @@ function animate(time, frame) {
     }
   }
   else if (state === 'room') {
-    // animate room labels
     camera.getWorldPosition(_camPos2D);
     const looked = getLookedRoomLabel();
     for (let i = 0; i < roomLabels.length; i++) {
@@ -852,7 +840,6 @@ function animate(time, frame) {
 renderer.setAnimationLoop((time, frame) => {
   animate(time, frame);
 });
-
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
