@@ -405,10 +405,15 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   ctx.fillText(line, x, y);
 }
 
-// ─── SALA: buida, parets grises + terra negre (plans separats, sense z-fighting) ──
+// ─── SALA: model escanejat com a escena augmentada, no com a fons ──
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
+
+const augmentedRoomGroup = new THREE.Group();
+augmentedRoomGroup.visible = false;
+camera.add(augmentedRoomGroup);
+augmentedRoomGroup.position.set(0, -0.35, -2.0);
 
 let roomAsset = null;
 let roomAssetPromise = null;
@@ -457,15 +462,17 @@ function ensureRoomEnvironment() {
         const size = new THREE.Vector3();
         box.getSize(size);
         const maxDim = Math.max(size.x, size.y, size.z) || 1;
-        const scale = 6 / maxDim;
+        const scale = 1.4 / maxDim;
         model.scale.setScalar(scale);
 
         box.setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
         model.position.copy(center).multiplyScalar(-1);
-        model.rotation.set(0, 0, 0);
+        model.rotation.set(0, Math.PI, 0);
 
-        roomGroup.add(model);
+        augmentedRoomGroup.clear();
+        augmentedRoomGroup.add(model);
+        augmentedRoomGroup.visible = true;
         roomAsset = model;
         resolve(model);
       },
@@ -487,30 +494,12 @@ function buildRoom(themeIndex) {
 
   ensureRoomEnvironment().catch(() => {});
 
-  const H = 4;
-
-  // El model escanejat de l’habitació és l’entorn real. No afegim parets ni terra procedurals.
-  const light = new THREE.PointLight(0xffffff, 1.5, 20);
-  light.position.set(0, H - 0.5, 0);
-  roomGroup.add(light);
-
-  // Cartell del nom de la sala a la paret del davant
-  const theme = themes[themeIndex];
-  const nc = document.createElement('canvas');
-  nc.width = 1024; nc.height = 256;
-  const nctx = nc.getContext('2d');
-
-  // Fons blanc arrodonit
-  nctx.fillStyle = '#ffffff';
-  const rr = 40, ww = 1024, hh = 256;
-  nctx.beginPath();
-  nctx.moveTo(rr, 0); nctx.lineTo(ww - rr, 0); nctx.quadraticCurveTo(ww, 0, ww, rr);
-  nctx.lineTo(ww, hh - rr); nctx.quadraticCurveTo(ww, hh, ww - rr, hh);
-  nctx.lineTo(rr, hh); nctx.quadraticCurveTo(0, hh, 0, hh - rr);
-  nctx.lineTo(0, rr); nctx.quadraticCurveTo(0, 0, rr, 0);
-  nctx.closePath(); nctx.fill();
-
-  // removed room title sign per request (no 'Ubicació X' text)
+  // El model escanejat de l’habitació apareix com a objecte augmentat davant de l’usuari.
+  if (roomAsset) {
+    augmentedRoomGroup.clear();
+    augmentedRoomGroup.add(roomAsset);
+    augmentedRoomGroup.visible = true;
+  }
 
   // Labels dins la sala: Historia, Productes, Grup
   roomLabels.length = 0;
