@@ -281,7 +281,7 @@ function makeRoomPreviewTexture(theme) {
 // Carreguem el model escanejat de la sala UNA sola vegada i el deixem fix
 // al món (no enganxat a la càmera), fent de "fons" per a tota l'experiència
 // (tant el hub com les sales de cada subsidiària).
-const ROOM_TARGET_HEIGHT = 3.0; // alçada aproximada de sostre en metres; ajusta si cal
+const ROOM_TARGET_HEIGHT = 9.0; // 3x l'original (3.0 * 3 = 9.0)
 
 function loadRoomBackground() {
   const glLoader = new GLTFLoader();
@@ -306,6 +306,7 @@ function loadRoomBackground() {
       const scale = ROOM_TARGET_HEIGHT / height;
       model.scale.setScalar(scale);
 
+      // Recalculem la caixa després de l'escalat
       box.setFromObject(model);
       const center = box.getCenter(new THREE.Vector3());
       model.position.x -= center.x;
@@ -316,9 +317,9 @@ function loadRoomBackground() {
     },
     undefined,
     (error) => {
-      console.error('No s’ha pogut carregar room.glb', error);
+      console.error('No s'ha pogut carregar room.glb', error);
       const s = document.getElementById('status');
-      if (s) { s.textContent = 'No s’ha pogut carregar room.glb (fons)'; s.style.color = '#f66'; }
+      if (s) { s.textContent = 'No s'ha pogut carregar room.glb (fons)'; s.style.color = '#f66'; }
     }
   );
 }
