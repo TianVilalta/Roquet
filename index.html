@@ -110,8 +110,13 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.3;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
+renderer.xr.addEventListener('sessionstart', () => {
+  exitRoom();
+  showGuideOverlay();
+});
 renderer.xr.addEventListener('sessionend', () => {
   exitRoom();
+  showGuideOverlay();
 });
 document.body.appendChild(renderer.domElement);
 
@@ -127,6 +132,39 @@ const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+
+const guideOverlayGroup = new THREE.Group();
+camera.add(guideOverlayGroup);
+guideOverlayGroup.position.set(0, 0, -1.4);
+let guideOverlayVisible = true;
+
+function showGuideOverlay() {
+  guideOverlayGroup.visible = true;
+  guideOverlayVisible = true;
+}
+
+function hideGuideOverlay() {
+  guideOverlayGroup.visible = false;
+  guideOverlayVisible = false;
+}
+
+new THREE.TextureLoader().load('roquet.png', (tex) => {
+  const aspect = (tex.image && tex.image.width) ? (tex.image.width / tex.image.height) : 1;
+  const width = 1.2;
+  const height = width / aspect;
+  const guideMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    })
+  );
+  guideMesh.position.set(0, 0, 0.01);
+  guideOverlayGroup.add(guideMesh);
+});
+showGuideOverlay();
 
 // Llum global més intensa i repartida des de diverses direccions perquè no
 // quedin cares del model completament a les fosques.
@@ -661,6 +699,7 @@ function exitRoom() {
   clearGroup(roomGroup);
   roomGroup.visible = false;
   hubGroup.visible = true;
+  loadRoomBackground('room.glb');
   state = 'hub';
 }
 
@@ -699,6 +738,7 @@ function handleInput(frame) {
     const bPressed = gp.buttons[5]?.pressed;
 
     if (aPressed && !buttonStates.a) {
+      if (guideOverlayVisible) hideGuideOverlay();
       if (state === 'hub') {
         const idx = getLookedCube();
         if (idx !== -1) enterRoom(idx);
@@ -712,6 +752,7 @@ function handleInput(frame) {
       }
     }
     if (bPressed && !buttonStates.b) {
+      if (guideOverlayVisible) hideGuideOverlay();
       if (state === 'room') {
         // if a floating window is open, close it first
         if (roomWindow) {
