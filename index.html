@@ -759,13 +759,10 @@ function handleInput(frame) {
         }
       }
     }
-
-    // Botons (mando dret)
     if (src.handedness !== 'right') continue;
     const gp = src.gamepad;
     const aPressed = gp.buttons[4]?.pressed;
     const bPressed = gp.buttons[5]?.pressed;
-
     if (aPressed && !buttonStates.a) {
       if (guideOverlayVisible) {
         hideGuideOverlay();
@@ -773,10 +770,8 @@ function handleInput(frame) {
         const idx = getLookedCube();
         if (idx !== -1) enterRoom(idx);
       } else if (state === 'room') {
-        // in-room: check looked room label
         const ridx = getLookedRoomLabel();
         if (ridx !== -1) {
-          // open floating window at label
           openLabelWindow(ridx);
         }
       }
@@ -785,7 +780,6 @@ function handleInput(frame) {
       if (guideOverlayVisible) {
         hideGuideOverlay();
       } else if (state === 'room') {
-        // if a floating window is open, close it first
         if (roomWindow) {
           roomGroup.remove(roomWindow);
           roomWindow.geometry?.dispose();
@@ -799,11 +793,8 @@ function handleInput(frame) {
     buttonStates.a = aPressed;
     buttonStates.b = bPressed;
   }
-
   infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
-
-// ─── LOOP D'ANIMACIÓ ──────────────────────────────────────────────────
 const _camPos2D = new THREE.Vector3();
 
 function animate(time, frame) {
@@ -855,15 +846,12 @@ function animate(time, frame) {
       r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
     }
   }
-
   handleInput(frame);
   renderer.render(scene, camera);
 }
-
 renderer.setAnimationLoop((time, frame) => {
   animate(time, frame);
 });
-
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
