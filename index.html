@@ -858,9 +858,12 @@ function animate(time, frame) {
   handleInput(frame);
   renderer.render(scene, camera);
 }
+
 renderer.setAnimationLoop((time, frame) => {
   animate(time, frame);
 });
+
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
