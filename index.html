@@ -566,14 +566,11 @@ function buildRoom(themeIndex) {
     const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), lmat);
     lmesh.position.set(lx, RL_Y, lz);
     lmesh.lookAt(_cam.x, RL_Y, _cam.z);
-    lmat.opacity = 0.4; // base visibility
+    lmat.opacity = 0.4;
     roomGroup.add(lmesh);
-
     roomLabels.push({ mesh: lmesh, index: i, prog: 0, text: labels[i] });
   }
 }
-
-// ─── BOTÓ VR ──────────────────────────────────────────────────────────
 const statusEl = document.getElementById('status');
 statusEl.textContent = 'Three.js carregat. Comprovant suport AR...';
 
@@ -585,7 +582,6 @@ if (navigator.xr) {
       statusEl.style.color = '#fa0';
     }
   }, 5000);
-
   navigator.xr.isSessionSupported('immersive-ar').then(supported => {
     resolved = true;
     if (supported) {
@@ -607,18 +603,13 @@ if (navigator.xr) {
 } else {
   statusEl.textContent = 'WebXR no disponible. Fes servir el Meta Quest Browser.';
 }
-
-// ─── ESTAT ────────────────────────────────────────────────────────────
-let state = 'hub';  // 'hub' | 'room'
+let state = 'hub';  
 const buttonStates = {};
-const roomLabels = []; // labels inside a room
-let roomWindow = null;  // currently opened floating window in room
-
-// ─── DETECCIÓ DE QUIN CUB ES MIRA ─────────────────────────────────────
+const roomLabels = []; 
+let roomWindow = null;
 const _fwd = new THREE.Vector3();
 const _cam = new THREE.Vector3();
 const _to  = new THREE.Vector3();
-
 function getLookedCube() {
   camera.getWorldDirection(_fwd);
   camera.getWorldPosition(_cam);
@@ -630,7 +621,6 @@ function getLookedCube() {
   }
   return best;
 }
-
 function getLookedRoomLabel() {
   camera.getWorldDirection(_fwd);
   camera.getWorldPosition(_cam);
@@ -642,13 +632,10 @@ function getLookedRoomLabel() {
   }
   return best;
 }
-
 function openLabelWindow(ridx) {
-  // remove existing
   if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null; }
   const info = roomLabels[ridx];
   const p = info.mesh.position.clone();
-  // create canvas with same style
   const cw = 1024, ch = 512;
   const c = document.createElement('canvas'); c.width = cw; c.height = ch;
   const ctx = c.getContext('2d');
@@ -659,7 +646,6 @@ function openLabelWindow(ridx) {
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
   const geom = new THREE.PlaneGeometry(1.6, 0.8);
   const mesh = new THREE.Mesh(geom, mat);
-  // position window slightly toward the camera so it appears in front of the label
   camera.getWorldPosition(_cam);
   const dir = _cam.clone().sub(p).normalize();
   const frontPos = p.clone().add(dir.multiplyScalar(0.6));
@@ -668,15 +654,12 @@ function openLabelWindow(ridx) {
   roomGroup.add(mesh);
   roomWindow = mesh;
 }
-
-// ─── ENTRADA / SORTIDA DE SALA ─────────────────────────────────────────
 function enterRoom(idx) {
   buildRoom(idx);
   hubGroup.visible = false;
   roomGroup.visible = true;
   state = 'room';
 }
-
 function exitRoom() {
   clearGroup(roomGroup);
   roomGroup.visible = false;
@@ -684,22 +667,15 @@ function exitRoom() {
   loadRoomBackground('room.glb');
   state = 'hub';
 }
-
-// ─── CONTROLADORS ─────────────────────────────────────────────────────
 const infoEl = document.getElementById('controllerInfo');
-
 function handleInput(frame) {
   const session = renderer.xr.getSession();
   if (!session) return;
-
   const refSpace = renderer.xr.getReferenceSpace();
   let infoText = 'Posició dels mandos:\n';
   let anyController = false;
-
   for (const src of session.inputSources) {
     if (!src.gamepad) continue;
-
-    // Posició
     if (frame && refSpace) {
       const space = src.gripSpace || src.targetRaySpace;
       if (space) {
@@ -712,13 +688,10 @@ function handleInput(frame) {
         }
       }
     }
-
-    // Botons (mando dret)
     if (src.handedness !== 'right') continue;
     const gp = src.gamepad;
     const aPressed = gp.buttons[4]?.pressed;
     const bPressed = gp.buttons[5]?.pressed;
-
     if (aPressed && !buttonStates.a) {
       if (guideOverlayVisible) {
         hideGuideOverlay();
@@ -726,10 +699,8 @@ function handleInput(frame) {
         const idx = getLookedCube();
         if (idx !== -1) enterRoom(idx);
       } else if (state === 'room') {
-        // in-room: check looked room label
         const ridx = getLookedRoomLabel();
         if (ridx !== -1) {
-          // open floating window at label
           openLabelWindow(ridx);
         }
       }
@@ -738,7 +709,6 @@ function handleInput(frame) {
       if (guideOverlayVisible) {
         hideGuideOverlay();
       } else if (state === 'room') {
-        // if a floating window is open, close it first
         if (roomWindow) {
           roomGroup.remove(roomWindow);
           roomWindow.geometry?.dispose();
@@ -752,11 +722,8 @@ function handleInput(frame) {
     buttonStates.a = aPressed;
     buttonStates.b = bPressed;
   }
-
   infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
-
-// ─── LOOP D'ANIMACIÓ ──────────────────────────────────────────────────
 const _camPos2D = new THREE.Vector3();
 
 function detectHeadsetResumeFromFrameGap(time, frame) {
@@ -765,29 +732,22 @@ function detectHeadsetResumeFromFrameGap(time, frame) {
     lastXRFrameTime = null;
     return;
   }
-
   if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) {
     resetToHubWithGuide();
   }
   lastXRFrameTime = time;
 }
-
 function animate(time, frame) {
   detectHeadsetResumeFromFrameGap(time, frame);
-
   if (pendingHubRecenter && renderer.xr.getSession() && frame) {
     recenterHubAroundUser();
     pendingHubRecenter = false;
   }
-
   if (state === 'hub') {
     camera.getWorldPosition(_camPos2D);
-
     const looked = getLookedCube();
-
     for (let i = 0; i < cubes.length; i++) {
       const c = cubes[i];
-      // Suau animació cap al focus
       const target = (i === looked) ? 1 : 0;
       c.prog += (target - c.prog) * 0.12;
       const s = 1 + (HOVER_SCALE - 1) * c.prog;
@@ -799,7 +759,7 @@ function animate(time, frame) {
       const imgPos = c.mesh.position.clone();
       bp.position.x = imgPos.x;
       bp.position.z = imgPos.z;
-      const base = 0.25; // visible even when not focused
+      const base = 0.25;
       const vis = base + (1 - base) * c.prog;
       bp.material.opacity = vis;
       bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z);
