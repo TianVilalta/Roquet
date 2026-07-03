@@ -842,45 +842,33 @@ function detectHeadsetResumeFromFrameGap(time, frame) {
     lastXRFrameTime = null;
     return;
   }
-
   if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) {
     resetToHubWithGuide();
   }
   lastXRFrameTime = time;
 }
-
 function animate(time, frame) {
   detectHeadsetResumeFromFrameGap(time, frame);
-
   if (pendingHubRecenter && renderer.xr.getSession() && frame) {
     recenterHubAroundUser();
     pendingHubRecenter = false;
   }
-
   if (state === 'hub') {
     camera.getWorldPosition(_camPos2D);
-
     const looked = getLookedCube();
-
     for (let i = 0; i < cubes.length; i++) {
       const c = cubes[i];
-      // Suau animació cap al focus
       const target = (i === looked) ? 1 : 0;
       c.prog += (target - c.prog) * 0.12;
       const s = 1 + (HOVER_SCALE - 1) * c.prog;
       c.mesh.scale.setScalar(s);
       const camPos3 = new THREE.Vector3(); camera.getWorldPosition(camPos3);
       c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
-
-      // Labels: apareixen quan l'element està enfocat. La posició Y ja es
-      // calcula un cop en carregar la imatge (per sota seu, amb marge fix
-      // respecte de la seva vora inferior real), aquí només actualitzem
-      // X/Z per si canvien i l'orientació, sense re-calcular Y cada frame.
       const bp = labelBottomPlanes[i];
       const imgPos = c.mesh.position.clone();
       bp.position.x = imgPos.x;
       bp.position.z = imgPos.z;
-      const base = 0.25; // visible even when not focused
+      const base = 0.25;
       const vis = base + (1 - base) * c.prog;
       bp.material.opacity = vis;
       bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z);
@@ -888,7 +876,6 @@ function animate(time, frame) {
     }
   }
   else if (state === 'room') {
-    // animate room labels
     camera.getWorldPosition(_camPos2D);
     const looked = getLookedRoomLabel();
     for (let i = 0; i < roomLabels.length; i++) {
@@ -903,16 +890,12 @@ function animate(time, frame) {
       r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
     }
   }
-
   handleInput(frame);
   renderer.render(scene, camera);
 }
-
 renderer.setAnimationLoop((time, frame) => {
   animate(time, frame);
 });
-
-
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
