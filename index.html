@@ -72,7 +72,6 @@
     <text x="200" y="92" font-size="12" fill="#888" text-anchor="middle">Meta Quest 3</text>
   </svg>
 </div>
-
 <script type="importmap">
 {
   "imports": {
@@ -91,20 +90,14 @@
     if (s) { s.textContent = 'Error: ' + (e.reason?.message ?? e.reason); s.style.color = '#f66'; }
   });
 </script>
-
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-
-// ─── RENDER ────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
-// Espai de color i tone mapping correctes: sense això, els materials PBR
-// del glTF (que assumeixen un renderer "físicament correcte") surten molt
-// més foscos del que haurien.
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.3;
@@ -119,20 +112,11 @@ renderer.xr.addEventListener('sessionend', () => {
   detachHeadsetVisibilityHandler();
 });
 document.body.appendChild(renderer.domElement);
-
 const scene = new THREE.Scene();
-// El fons ja no és passthrough ni negre pla: el model room.glb fa de fons/entorn.
 scene.background = new THREE.Color(0x0a0a0a);
-
-// Entorn d'il·luminació (IBL) neutre: imprescindible perquè els materials
-// PBR (metalness/roughness) del glTF no surtin negres allà on són metàl·lics
-// o reflectants — sense un envMap, aquestes zones no tenen res a reflectir
-// i el resultat és negre pur encara que hi hagi llums a l'escena.
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
-
 const guideOverlayGroup = new THREE.Group();
 camera.add(guideOverlayGroup);
 guideOverlayGroup.position.set(0, 0, -1.4);
@@ -141,42 +125,35 @@ let headsetVisibilityHandlerAttached = false;
 let lastXRFrameTime = null;
 let pendingHubRecenter = false;
 const HEADSET_OFF_FRAME_GAP_MS = 1000;
-
 function showGuideOverlay() {
   guideOverlayGroup.visible = true;
   guideOverlayVisible = true;
 }
-
 function hideGuideOverlay() {
   guideOverlayGroup.visible = false;
   guideOverlayVisible = false;
 }
-
 function resetToHubWithGuide() {
   exitRoom();
   recenterHubAroundUser();
   pendingHubRecenter = true;
   showGuideOverlay();
 }
-
 function markHeadsetOffOrPaused() {
   resetToHubWithGuide();
   lastXRFrameTime = null;
 }
-
 function onHeadsetVisibilityChange(event) {
   const state = event?.session?.visibilityState || renderer.xr.getSession()?.visibilityState;
   if (state === 'hidden' || state === 'visible' || state === 'visible-blurred') {
     markHeadsetOffOrPaused();
   }
 }
-
 function onDocumentVisibilityChange() {
   if (document.visibilityState === 'visible' || document.visibilityState === 'hidden') {
     markHeadsetOffOrPaused();
   }
 }
-
 function attachHeadsetVisibilityHandler() {
   const session = renderer.xr.getSession();
   if (!session || headsetVisibilityHandlerAttached) return;
@@ -184,7 +161,6 @@ function attachHeadsetVisibilityHandler() {
   document.addEventListener('visibilitychange', onDocumentVisibilityChange);
   headsetVisibilityHandlerAttached = true;
 }
-
 function detachHeadsetVisibilityHandler() {
   const session = renderer.xr.getSession();
   if (session) {
@@ -194,7 +170,6 @@ function detachHeadsetVisibilityHandler() {
   headsetVisibilityHandlerAttached = false;
   lastXRFrameTime = null;
 }
-
 new THREE.TextureLoader().load('roquet.png', (tex) => {
   const aspect = (tex.image && tex.image.width) ? (tex.image.width / tex.image.height) : 1;
   const width = 1.2;
@@ -212,9 +187,6 @@ new THREE.TextureLoader().load('roquet.png', (tex) => {
   guideOverlayGroup.add(guideMesh);
 });
 showGuideOverlay();
-
-// Llum global més intensa i repartida des de diverses direccions perquè no
-// quedin cares del model completament a les fosques.
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.2));
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
 dirLight.position.set(3, 6, 4);
@@ -224,21 +196,15 @@ fillLight.position.set(-4, 3, -3);
 scene.add(fillLight);
 const ambient = new THREE.AmbientLight(0xffffff, 0.4);
 scene.add(ambient);
-
-// ─── HUD 3D subjecte a la càmera (segueix la vista) ─────────────────
 const hud3D = new THREE.Group();
 camera.add(hud3D);
 hud3D.position.set(0, -0.35, -0.9);
 hud3D.rotation.set(0, 0, 0);
-
-// fons semi-transparent del HUD
 const hudBg = new THREE.Mesh(
   new THREE.PlaneGeometry(0.36, 0.12),
   new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 })
 );
 hud3D.add(hudBg);
-
-// carreguem logo i el posem a l'esquerra superior del panel
 const texLoader = new THREE.TextureLoader();
 texLoader.load('roquet.png', (tex) => {
   const w = 0.18;
@@ -251,8 +217,6 @@ texLoader.load('roquet.png', (tex) => {
   logo.position.set(-0.09, 0.02, 0.01);
   hud3D.add(logo);
 });
-
-// dibuixem el controlador en un canvas i el convertim a textura
 const ctrlCanvas = document.createElement('canvas');
 ctrlCanvas.width = 600; ctrlCanvas.height = 200;
 const cctx = ctrlCanvas.getContext('2d');
@@ -260,7 +224,6 @@ function drawControllerPreview(ctx) {
   ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
   ctx.fillStyle = '#222'; ctx.strokeStyle = '#444'; ctx.lineWidth = 6;
   const rx = 20, ry = 20, rw = ctx.canvas.width-40, rh = ctx.canvas.height-40;
-  // rounded rect
   ctx.beginPath();
   ctx.moveTo(20+rx,20);
   ctx.arcTo(20+rw,20,20+rw,20+rh,ry);
@@ -268,15 +231,10 @@ function drawControllerPreview(ctx) {
   ctx.arcTo(20,20+rh,20,20,ry);
   ctx.arcTo(20,20,20+rw,20,ry);
   ctx.closePath(); ctx.fill(); ctx.stroke();
-
-  // A button (green)
   ctx.fillStyle = '#0b8f0b'; ctx.beginPath(); ctx.arc(420, 100, 28, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('A', 420, 100);
-  // B button (red)
   ctx.fillStyle = '#b00'; ctx.beginPath(); ctx.arc(500, 100, 28, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.fillText('B', 500, 100);
-
-  // labels
   ctx.fillStyle = '#ccc'; ctx.font = '18px Arial'; ctx.fillText('A = Entrar', 460, 40);
   ctx.fillText('B = Sortir', 460, 68);
   ctx.fillStyle = '#888'; ctx.font = '14px Arial'; ctx.fillText('Meta Quest 3', 460, 150);
@@ -289,8 +247,6 @@ const ctrlMesh = new THREE.Mesh(
   );
   ctrlMesh.position.set(0, -0.03, 0.01);
   hud3D.add(ctrlMesh);
-
-// ─── TEMES ────────────────────────────────────────────────────────────
 const themes = [
   { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png',
     text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo',
@@ -311,55 +267,37 @@ const themes = [
     text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.',
     text2: '​08500 , Vic, Barcelona, España' },
 ];
-
-// ─── TEXTURA DIFUMINADA DEL INTERIOR DE CADA SALA ─────────────────────
-// Dibuixem una perspectiva senzilla d'una sala sobre un canvas i la difuminem
 function makeRoomPreviewTexture(theme) {
   const S = 256;
-  // Canvas de dibuix sense blur
   const off = document.createElement('canvas');
   off.width = S; off.height = S;
   const oc = off.getContext('2d');
 
   const themeColor = '#' + new THREE.Color(theme.color).getHexString();
-
-  // Fons / paret del fons: color accent del tema clar
   oc.fillStyle = '#aaaaaa';
   oc.fillRect(0, 0, S, S);
-
-  // Perspectiva: punt de fuga al centre
   const cx = S * 0.5, cy = S * 0.48;
   const margin = S * 0.22;
-
-  // Paret esquerra
   oc.fillStyle = '#999999';
   oc.beginPath();
   oc.moveTo(0, 0); oc.lineTo(cx, cy);
   oc.lineTo(cx, S); oc.lineTo(0, S);
   oc.closePath(); oc.fill();
-
-  // Paret dreta
   oc.fillStyle = '#777777';
   oc.beginPath();
   oc.moveTo(S, 0); oc.lineTo(cx, cy);
   oc.lineTo(cx, S); oc.lineTo(S, S);
   oc.closePath(); oc.fill();
-
-  // Terra negre
   oc.fillStyle = '#111111';
   oc.beginPath();
   oc.moveTo(0, S); oc.lineTo(cx, S * 0.72);
   oc.lineTo(S, S);
   oc.closePath(); oc.fill();
-
-  // Sostre fosc
   oc.fillStyle = '#333333';
   oc.beginPath();
   oc.moveTo(0, 0); oc.lineTo(cx, S * 0.22);
   oc.lineTo(S, 0);
   oc.closePath(); oc.fill();
-
-  // Línia de color del tema al centre (com un element decoratiu)
   oc.strokeStyle = themeColor;
   oc.lineWidth = 10;
   oc.globalAlpha = 0.9;
