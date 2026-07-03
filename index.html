@@ -109,6 +109,7 @@ guideOverlayGroup.position.set(0, 0, -1.4);
 let guideOverlayVisible = true;
 let headsetVisibilityHandlerAttached = false;
 let lastXRFrameTime = null;
+let pendingHubRecenter = false;
 const HEADSET_OFF_FRAME_GAP_MS = 1000;
 
 function showGuideOverlay() {
@@ -123,6 +124,8 @@ function hideGuideOverlay() {
 
 function resetToHubWithGuide() {
   exitRoom();
+  recenterHubAroundUser();
+  pendingHubRecenter = true;
   showGuideOverlay();
 }
 
@@ -370,14 +373,19 @@ loadRoomBackground();
 const hubGroup = new THREE.Group();
 scene.add(hubGroup);
 
+function recenterHubAroundUser() {
+  camera.getWorldPosition(_cam);
+  hubGroup.position.set(_cam.x, 0, _cam.z);
+}
+
 // ── Imatges ──
 const IMAGE_WIDTH = 1.2;
 const IMAGE_HEIGHT = .8;
 const HOVER_SCALE = 1.18;
 const RADIUS = 2.8;
-const IMAGE_BOTTOM_Y = 0.35;
+const IMAGE_BOTTOM_Y = 0.12;
 const IMAGE_Y = IMAGE_BOTTOM_Y + IMAGE_HEIGHT / 2;
-const HUB_LABEL_Y = 0.28;
+const HUB_LABEL_Y = 0.16;
 
 const loader = new THREE.TextureLoader();
 const cubes = []; // { mesh, index, prog }
@@ -529,9 +537,10 @@ function buildRoom(themeIndex) {
   roomLabels.length = 0;
   const labels = ['Historia', 'Productes', 'Grup'];
   const RL_RADIUS = 2.4;
-  const RL_Y = 0.75;
+  const RL_Y = 0.45;
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
+  camera.getWorldPosition(_cam);
   dir.y = 0;
   if (dir.lengthSq() === 0) dir.set(0, 0, -1);
   dir.normalize();
@@ -539,8 +548,8 @@ function buildRoom(themeIndex) {
   const labelAngles = [baseAngle, baseAngle + (2 * Math.PI / 3), baseAngle - (2 * Math.PI / 3)];
   for (let i = 0; i < labels.length; i++) {
     const ang = labelAngles[i];
-    const lx = Math.sin(ang) * RL_RADIUS;
-    const lz = -Math.cos(ang) * RL_RADIUS;
+    const lx = _cam.x + Math.sin(ang) * RL_RADIUS;
+    const lz = _cam.z - Math.cos(ang) * RL_RADIUS;
 
     // canvas with rounded rect
     const lc = document.createElement('canvas'); lc.width = 512; lc.height = 120;
@@ -556,7 +565,7 @@ function buildRoom(themeIndex) {
     const lmat = new THREE.MeshBasicMaterial({ map: ltex, transparent: true, side: THREE.DoubleSide });
     const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), lmat);
     lmesh.position.set(lx, RL_Y, lz);
-    lmesh.lookAt(0, RL_Y, 0);
+    lmesh.lookAt(_cam.x, RL_Y, _cam.z);
     lmat.opacity = 0.4; // base visibility
     roomGroup.add(lmesh);
 
@@ -582,7 +591,8 @@ if (navigator.xr) {
     if (supported) {
       statusEl.textContent = 'Llest. Posa\'t les ulleres i entra en AR.';
       const btn = ARButton.createButton(renderer, {
-        optionalFeatures: ['local-floor', 'dom-overlay'],
+        requiredFeatures: ['local-floor'],
+        optionalFeatures: ['dom-overlay'],
         domOverlay: { root: document.body }
       });
       document.body.appendChild(btn);
@@ -765,6 +775,11 @@ function detectHeadsetResumeFromFrameGap(time, frame) {
 function animate(time, frame) {
   detectHeadsetResumeFromFrameGap(time, frame);
 
+  if (pendingHubRecenter && renderer.xr.getSession() && frame) {
+    recenterHubAroundUser();
+    pendingHubRecenter = false;
+  }
+
   if (state === 'hub') {
     camera.getWorldPosition(_camPos2D);
 
@@ -779,15 +794,12 @@ function animate(time, frame) {
       c.mesh.scale.setScalar(s);
       const camPos3 = new THREE.Vector3(); camera.getWorldPosition(camPos3);
       c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
-
-      // Labels: apareixen quan l'element està enfocat i mantenen alçada fixa respecte del terra.
       const bp = labelBottomPlanes[i];
       bp.position.y = HUB_LABEL_Y;
-      // keep text at same distance as the image
       const imgPos = c.mesh.position.clone();
       bp.position.x = imgPos.x;
       bp.position.z = imgPos.z;
-      const base = 0.25;
+      const base = 0.25; // visible even when not focused
       const vis = base + (1 - base) * c.prog;
       bp.material.opacity = vis;
       bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z);
