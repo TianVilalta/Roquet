@@ -51,6 +51,7 @@ import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -62,11 +63,15 @@ renderer.xr.setReferenceSpaceType('local-floor');
 renderer.xr.addEventListener('sessionstart', () => { resetToHubWithGuide(); attachHeadsetVisibilityHandler(); });
 renderer.xr.addEventListener('sessionend', () => { resetToHubWithGuide(); detachHeadsetVisibilityHandler(); });
 document.body.appendChild(renderer.domElement);
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0a0a);
+
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+
 const guideOverlayGroup = new THREE.Group();
 camera.add(guideOverlayGroup);
 guideOverlayGroup.position.set(0, 0, -1.4);
@@ -75,6 +80,7 @@ let headsetVisibilityHandlerAttached = false;
 let lastXRFrameTime = null;
 let pendingHubRecenter = false;
 const HEADSET_OFF_FRAME_GAP_MS = 1000;
+
 function showGuideOverlay() { guideOverlayGroup.visible = true; guideOverlayVisible = true; }
 function hideGuideOverlay() { guideOverlayGroup.visible = false; guideOverlayVisible = false; }
 function resetToHubWithGuide() { exitRoom(); recenterHubAroundUser(); pendingHubRecenter = true; showGuideOverlay(); }
@@ -83,6 +89,7 @@ function onHeadsetVisibilityChange(event) { const state = event?.session?.visibi
 function onDocumentVisibilityChange() { if (document.visibilityState === 'visible' || document.visibilityState === 'hidden') { markHeadsetOffOrPaused(); } }
 function attachHeadsetVisibilityHandler() { const session = renderer.xr.getSession(); if (!session || headsetVisibilityHandlerAttached) return; session.addEventListener('visibilitychange', onHeadsetVisibilityChange); document.addEventListener('visibilitychange', onDocumentVisibilityChange); headsetVisibilityHandlerAttached = true; }
 function detachHeadsetVisibilityHandler() { const session = renderer.xr.getSession(); if (session) { session.removeEventListener('visibilitychange', onHeadsetVisibilityChange); } document.removeEventListener('visibilitychange', onDocumentVisibilityChange); headsetVisibilityHandlerAttached = false; lastXRFrameTime = null; }
+
 new THREE.TextureLoader().load('roquet.png', (tex) => {
   const aspect = (tex.image && tex.image.width) ? (tex.image.width / tex.image.height) : 1;
   const width = 1.2;
@@ -92,6 +99,7 @@ new THREE.TextureLoader().load('roquet.png', (tex) => {
   guideOverlayGroup.add(guideMesh);
 });
 showGuideOverlay();
+
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.2));
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
 dirLight.position.set(3, 6, 4);
@@ -101,12 +109,15 @@ fillLight.position.set(-4, 3, -3);
 scene.add(fillLight);
 const ambient = new THREE.AmbientLight(0xffffff, 0.4);
 scene.add(ambient);
+
 const hud3D = new THREE.Group();
 camera.add(hud3D);
 hud3D.position.set(0, -0.35, -0.9);
 hud3D.rotation.set(0, 0, 0);
+
 const hudBg = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.12), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 }));
 hud3D.add(hudBg);
+
 const texLoader = new THREE.TextureLoader();
 texLoader.load('roquet.png', (tex) => {
   const w = 0.18;
@@ -116,6 +127,7 @@ texLoader.load('roquet.png', (tex) => {
   logo.position.set(-0.09, 0.02, 0.01);
   hud3D.add(logo);
 });
+
 const ctrlCanvas = document.createElement('canvas');
 ctrlCanvas.width = 600; ctrlCanvas.height = 200;
 const cctx = ctrlCanvas.getContext('2d');
@@ -136,6 +148,7 @@ const ctrlTex = new THREE.CanvasTexture(ctrlCanvas);
 const ctrlMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.10), new THREE.MeshBasicMaterial({ map: ctrlTex, transparent: true }));
 ctrlMesh.position.set(0, -0.03, 0.01);
 hud3D.add(ctrlMesh);
+
 const themes = [
   { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png', text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo', text2: '08551 Tona , Barcelona , España' },
   { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png', text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.', text2: '08551 Tona , Barcelona, España' },
@@ -144,9 +157,11 @@ const themes = [
   { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png', text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.', text2: '107025 Aricestii Rahtivani , Prahova , Romania' },
   { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png', text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.', text2: '08500 , Vic, Barcelona, España' },
 ];
+
 const ROOM_TARGET_HEIGHT = 12.0;
 const backgroundGroup = new THREE.Group();
 scene.add(backgroundGroup);
+
 function getThemeBackgroundAsset(theme) { if (!theme?.img) return 'room.glb'; return theme.img.replace(/\.[^.]+$/, '.glb'); }
 function loadRoomBackground(assetPath = 'room.glb') {
   const glLoader = new GLTFLoader();
@@ -175,11 +190,14 @@ function loadRoomBackground(assetPath = 'room.glb') {
   }, undefined, (error) => { console.error(`No s'ha pogut carregar ${assetPath}`, error); });
 }
 loadRoomBackground();
+
 const hubGroup = new THREE.Group();
 scene.add(hubGroup);
 function recenterHubAroundUser() { camera.getWorldPosition(_cam); hubGroup.position.set(_cam.x, 0, _cam.z); }
+
 const IMAGE_WIDTH = 1.2; const IMAGE_HEIGHT = .8; const HOVER_SCALE = 1.18; const RADIUS = 2.8; const IMAGE_Y = 1.0;
 const loader = new THREE.TextureLoader(); const cubes = []; const labelBottomPlanes = [];
+
 for (let i = 0; i < themes.length; i++) {
   const angle = (i / themes.length) * Math.PI * 2;
   const x = Math.sin(angle) * RADIUS; const z = -Math.cos(angle) * RADIUS;
@@ -213,6 +231,7 @@ for (let i = 0; i < themes.length; i++) {
   });
   cubes.push({ mesh, index: i, prog: 0 }); labelBottomPlanes.push(bmesh);
 }
+
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   const words = text.split(' '); let line = '';
   for (let n = 0; n < words.length; n++) {
@@ -221,14 +240,17 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   }
   ctx.fillText(line, x, y);
 }
+
 const roomGroup = new THREE.Group(); roomGroup.visible = false; scene.add(roomGroup);
 let currentThemeIndex = -1;
+
 function clearGroup(g, preserveKey = '') {
   while (g.children.length) {
     const c = g.children[0]; g.remove(c); if (preserveKey && c.userData?.[preserveKey]) continue; c.geometry?.dispose();
     if (c.material) { (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose()); }
   }
 }
+
 function buildRoom(themeIndex) {
   clearGroup(roomGroup); currentThemeIndex = themeIndex; const theme = themes[themeIndex]; if (theme) { loadRoomBackground(getThemeBackgroundAsset(theme)); }
   roomLabels.length = 0; const labels = ['Historia', 'Productes', 'Grup']; const RL_RADIUS = 2.4; const RL_Y = 1.2; const dir = new THREE.Vector3();
@@ -243,16 +265,20 @@ function buildRoom(themeIndex) {
     lmesh.position.set(lx, RL_Y, lz); lmesh.lookAt(0, RL_Y, 0); lmesh.material.opacity = 0.4; roomGroup.add(lmesh); roomLabels.push({ mesh: lmesh, index: i, prog: 0, text: labels[i] });
   }
 }
+
 const statusEl = document.getElementById('status'); statusEl.textContent = 'Three.js carregat. Comprovant suport VR...';
 if (navigator.xr) {
   navigator.xr.isSessionSupported('immersive-vr').then(supported => {
     if (supported) { statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó.'; document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor', 'bounded-floor'] })); } else { statusEl.textContent = 'VR no suportat. Obre per HTTPS al Meta Quest Browser.'; }
   }).catch(err => { statusEl.textContent = 'Error VR: ' + err.message; });
 } else { statusEl.textContent = 'WebXR no disponible. Fes servir el Meta Quest Browser.'; }
+
 let state = 'hub'; const buttonStates = {}; const roomLabels = []; let roomWindow = null;
 const _fwd = new THREE.Vector3(); const _cam = new THREE.Vector3(); const _to = new THREE.Vector3();
+
 function getLookedCube() { camera.getWorldDirection(_fwd); camera.getWorldPosition(_cam); let best = -1, bestDot = 0.72; for (let i = 0; i < cubes.length; i++) { _to.copy(cubes[i].mesh.position).sub(_cam).normalize(); const d = _fwd.dot(_to); if (d > bestDot) { bestDot = d; best = i; } } return best; }
 function getLookedRoomLabel() { camera.getWorldDirection(_fwd); camera.getWorldPosition(_cam); let best = -1, bestDot = 0.7; for (let i = 0; i < roomLabels.length; i++) { _to.copy(roomLabels[i].mesh.position).sub(_cam).normalize(); const d = _fwd.dot(_to); if (d > bestDot) { bestDot = d; best = i; } } return best; }
+
 function openLabelWindow(ridx) {
   if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null; }
   const info = roomLabels[ridx]; const p = info.mesh.position.clone();
@@ -270,17 +296,21 @@ function openLabelWindow(ridx) {
     });
     let logoImg = null;
     imgPromises.push(new Promise(res => imageLoader.load('roquet.png', img => { logoImg = img; res(); }, null, () => res())));
+    
     Promise.all(imgPromises).then(() => {
       const timelineGroup = new THREE.Group();
       camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
       const centerAngle = Math.atan2(_fwd.x, -_fwd.z);
-      const hRadius = 2.4;
+      
+      // S'apropa la distància radial de les finestres (de 2.4 a 1.65)
+      const hRadius = 1.65;
       const angles = [
         centerAngle - Math.PI * 0.45,
         centerAngle - Math.PI * 0.15,
         centerAngle + Math.PI * 0.15,
         centerAngle + Math.PI * 0.45
       ];
+      
       historyData.forEach((data, index) => {
         const cw = 700, ch = 800;
         const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d');
@@ -347,8 +377,10 @@ function openLabelWindow(ridx) {
     mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); roomGroup.add(mesh); roomWindow = mesh;
   }
 }
+
 function enterRoom(idx) { buildRoom(idx); hubGroup.visible = false; roomGroup.visible = true; state = 'room'; }
 function exitRoom() { clearGroup(roomGroup); roomGroup.visible = false; hubGroup.visible = true; loadRoomBackground('room.glb'); state = 'hub'; currentThemeIndex = -1; }
+
 const infoEl = document.getElementById('controllerInfo');
 function handleInput(frame) {
   const session = renderer.xr.getSession(); if (!session) return;
@@ -386,8 +418,10 @@ function handleInput(frame) {
   }
   infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
+
 const _camPos2D = new THREE.Vector3();
 function detectHeadsetResumeFromFrameGap(time, frame) { if (!renderer.xr.getSession() || !frame) { lastXRFrameTime = null; return; } if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToHubWithGuide(); } lastXRFrameTime = time; }
+
 function animate(time, frame) {
   detectHeadsetResumeFromFrameGap(time, frame);
   if (pendingHubRecenter && renderer.xr.getSession() && frame) { recenterHubAroundUser(); pendingHubRecenter = false; }
