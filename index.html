@@ -137,12 +137,12 @@ const ctrlMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.10), new THREE.M
 ctrlMesh.position.set(0, -0.03, 0.01);
 hud3D.add(ctrlMesh);
 const themes = [
-  { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png', text: 'Ubicada en Tona...', text2: '08551 Tona , Barcelona , España' },
-  { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png', text: 'Ubicada en Tona...', text2: '08551 Tona , Barcelona, España' },
-  { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png', text: 'Ubicada en Vic...', text2: '08510, Roda de Ter, Barcelona, España' },
-  { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png', text: 'Ubicada en Centelles...', text2: '08540 , Centelles, Barcelona, España' },
-  { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png', text: 'Inaugurada en 2015...', text2: '107025 Aricestii Rahtivani , Romania' },
-  { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png', text: 'Ubicada en Roda de Ter...', text2: '08500 , Vic, Barcelona, España' },
+  { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png', text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo', text2: '08551 Tona , Barcelona , España' },
+  { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png', text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.', text2: '08551 Tona , Barcelona, España' },
+  { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png', text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición', text2: '08510, Roda de Ter, Barcelona, España' },
+  { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png', text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.', text2: '08540 , Centelles, Barcelona, España' },
+  { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png', text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.', text2: '107025 Aricestii Rahtivani , Prahova , Romania' },
+  { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png', text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.', text2: '08500 , Vic, Barcelona, España' },
 ];
 const ROOM_TARGET_HEIGHT = 12.0;
 const backgroundGroup = new THREE.Group();
@@ -267,6 +267,7 @@ function openLabelWindow(ridx) {
       { title: "Otros productos", imgKey: "otros.png", text: "Aparte de los 3 grupos principales de productos, Roquet también desarrolla válvulas y sistemas, para aplicaciones específicas, donde la experiencia, con una amplia gama de diferentes componentes hidráulicos, se puede combinar para desarrollar una solución interesante. Por ejemplo válvulas de nivelación, válvulas de marcado agrícolas, grupos electrógenos compactos, actuadores electrohidráulicos, etc." }
     ];
     let startY = 200; const rowHeight = 330; const wTex = new THREE.CanvasTexture(c);
+    new THREE.ImageLoader().load('roquet.png', (logoImg) => { ctx.drawImage(logoImg, cw - 260, 45, 200, 60); wTex.needsUpdate = true; });
     productsData.forEach((prod, index) => {
       ctx.fillStyle = '#ffffff'; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'left'; ctx.fillText(prod.title, 400, startY + 40);
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(400, startY + 65, 230, 42); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.fillText('VER PRODUCTOS', 515, startY + 91);
