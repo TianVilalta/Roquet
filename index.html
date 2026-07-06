@@ -98,6 +98,13 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
+// Vector i elements auxiliars globals compartits
+const _fwd = new THREE.Vector3();
+const _cam = new THREE.Vector3();
+const _to  = new THREE.Vector3();
+const _camPos2D = new THREE.Vector3();
+const infoEl = document.getElementById('controllerInfo');
+
 // ─── RENDER ────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
@@ -295,20 +302,18 @@ const themes = [
     text2: '08500 , Vic, Barcelona, España' },
 ];
 
-// ─── FONS DE L'ESCENA ──────────────────────────────────────────────────
+// ─── FONS DE L'ESCENA FIXED A ROOM.GLB ──────────────────────────────────
 const ROOM_TARGET_HEIGHT = 12.0;
 const backgroundGroup = new THREE.Group();
 scene.add(backgroundGroup);
 
-function getThemeBackgroundAsset(theme) {
-  if (!theme?.img) return 'room.glb';
-  return theme.img.replace(/\.[^.]+$/, '.glb');
-}
-
 function loadRoomBackground(assetPath = 'room.glb') {
+  const safeAssetPath = 'room.glb';
+  if (backgroundGroup.children.length > 0) return;
+
   const glLoader = new GLTFLoader();
   glLoader.load(
-    assetPath,
+    safeAssetPath,
     (gltf) => {
       const model = gltf.scene;
       clearGroup(backgroundGroup);
@@ -321,7 +326,6 @@ function loadRoomBackground(assetPath = 'room.glb') {
           if (obj.material) {
             const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
             const newMats = mats.map((m) => {
-              // Canviat a MeshStandardMaterial per suportar correctament les llums noves i evitar pantalles negres
               const stdMat = new THREE.MeshStandardMaterial({
                 map: m.map || null,
                 color: m.map ? 0xffffff : (m.color || 0xffffff),
@@ -358,13 +362,12 @@ function loadRoomBackground(assetPath = 'room.glb') {
       model.position.z -= center.z;
       model.position.y -= box.min.y;
       model.position.y -= 4.5; 
-      // Eliminat el gir invers per prevenir problemes de paret oposada o oclusió que causaven foscor
 
       backgroundGroup.add(model);
     },
     undefined,
     (error) => {
-      console.error(`No s'ha pogut carregar ${assetPath}`, error);
+      console.error(`No s'ha pogut carregar ${safeAssetPath}`, error);
     }
   );
 }
@@ -497,10 +500,7 @@ function clearGroup(g, preserveKey = '') {
 
 function buildRoom(themeIndex) {
   clearGroup(roomGroup);
-  const theme = themes[themeIndex];
-  if (theme) {
-    loadRoomBackground(getThemeBackgroundAsset(theme));
-  }
+  loadRoomBackground('room.glb');
 
   roomLabels.length = 0;
   const labels = ['Historia', 'Productes', 'Grup'];
@@ -560,10 +560,7 @@ let state = 'hub';
 const buttonStates = {};
 const roomLabels = []; 
 let roomWindow = null;  
-
-const _fwd = new THREE.Vector3();
-const _cam = new THREE.Vector3();
-const _to  = new THREE.Vector3();
+let currentThemeIndex = -1;
 
 function getLookedCube() {
   camera.getWorldDirection(_fwd);
@@ -577,7 +574,6 @@ function getLookedCube() {
   return best;
 }
 
-// ─── GENERACIÓ DE WINDOWS INTERIORS ────────────────────────────────────
 function getLookedRoomLabel() {
   camera.getWorldDirection(_fwd);
   camera.getWorldPosition(_cam);
@@ -621,7 +617,6 @@ function openLabelWindow(ridx) {
       camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
       const centerAngle = Math.atan2(_fwd.x, -_fwd.z);
       
-      // Ajust radial a 1.65 (finestres del timeline més a prop de l'usuari)
       const hRadius = 1.65;
       const angles = [
         centerAngle - Math.PI * 0.45,
@@ -638,7 +633,6 @@ function openLabelWindow(ridx) {
         ctx.fillStyle = '#ffffff'; ctx.font = 'bold 50px Arial'; ctx.textAlign = 'left'; ctx.fillText(data.year, 50, 90);
         if (logoImg) { ctx.drawImage(logoImg, cw - 210, 45, 160, 48); }
         
-        // Línia decorativa de tall neutra o de marca, eliminada qualsevol vermella lletja de debug o guia sobrant
         ctx.strokeStyle = '#333333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(50, 130); ctx.lineTo(cw - 50, 130); ctx.stroke();
         
         let textY = 190;
@@ -668,6 +662,7 @@ function openLabelWindow(ridx) {
       { title: "Otros productos", imgKey: "otros.png", text: "Aparte de los 3 grupos principales de productos, Roquet también desarrolla..." }
     ];
     const imageLoader = new THREE.ImageLoader();
+    const wTex = new THREE.CanvasTexture(c);
     const promises = [
       new Promise(res => imageLoader.load('roquet.png', img => res({key:'logo', img}), null, () => res({key:'logo', img:null}))),
       ...productsData.map(prod => new Promise(res => imageLoader.load(prod.imgKey, img => res({key:prod.imgKey, img}), null, () => res({key:prod.imgKey, img:null}))))
@@ -687,7 +682,6 @@ function openLabelWindow(ridx) {
       });
       wTex.needsUpdate = true;
     });
-    const wTex = new THREE.CanvasTexture(c);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.4), new THREE.MeshBasicMaterial({ map: wTex, transparent: true, side: THREE.DoubleSide }));
     camera.getWorldPosition(_cam); const dir = _cam.clone().sub(p).normalize(); const frontPos = p.clone().add(dir.multiplyScalar(0.5));
     mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); roomGroup.add(mesh); roomWindow = mesh;
@@ -701,7 +695,6 @@ function openLabelWindow(ridx) {
   }
 }
 
-let currentThemeIndex = -1;
 function enterRoom(idx) { currentThemeIndex = idx; buildRoom(idx); hubGroup.visible = false; roomGroup.visible = true; state = 'room'; }
 function exitRoom() { clearGroup(roomGroup); roomGroup.visible = false; hubGroup.visible = true; loadRoomBackground('room.glb'); state = 'hub'; currentThemeIndex = -1; }
 
@@ -741,7 +734,7 @@ function handleInput(frame) {
     }
     buttonStates.a = aPressed; buttonStates.b = bPressed;
   }
-  infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
+  if(infoEl) infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
 
 // ─── LOOP PRINCIPAL D'ANIMACIÓ ─────────────────────────────────────────
