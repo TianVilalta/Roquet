@@ -266,7 +266,7 @@ function openLabelWindow(ridx) {
       { title: "Distribuidores", imgKey: "distribuidores.png", text: "Roquet dispone de una amplia gama de distribuidores estándar y desarrolla nuevos modelos para aplicaciones específicas. En el pasado, los distribuidores Roquet eran conocidos por ser robustos y de confianza. Últimamente hemos desarrollado válvulas más sofisticadas para cumplir con los requisitos de nuestros clientes." },
       { title: "Otros productos", imgKey: "otros.png", text: "Aparte de los 3 grupos principales de productos, Roquet también desarrolla válvulas y sistemas, para aplicaciones específicas, donde la experiencia, con una amplia gama de diferentes componentes hidráulicos, se puede combinar para desarrollar una solución interesante. Por ejemplo válvulas de nivelación, válvulas de marcado agrícolas, grupos electrógenos compactos, actuadores electrohidráulicos, etc." }
     ];
-    let startY = 200; const rowHeight = 330; const wTex = new THREE.CanvasTexture(c);
+    let startY = 220; const rowHeight = 330; const wTex = new THREE.CanvasTexture(c);
     new THREE.ImageLoader().load('roquet.png', (logoImg) => { ctx.drawImage(logoImg, cw - 260, 45, 200, 60); wTex.needsUpdate = true; });
     productsData.forEach((prod, index) => {
       ctx.fillStyle = '#ffffff'; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'left'; ctx.fillText(prod.title, 400, startY + 40);
@@ -321,10 +321,10 @@ function handleInput(frame) {
           const intersects = new THREE.Raycaster(_cam, _fwd).intersectObject(roomWindow);
           if (intersects.length > 0) {
             const pixelY = (1 - intersects[0].uv.y) * 1600;
-            if (pixelY > 200 && pixelY < 530) { openSubProductWindow("Cilindros", "Filtre i especificacions de la línia completa de cilindres."); }
-            else if (pixelY >= 530 && pixelY < 860) { openSubProductWindow("Bombas y Motores", "Filtre i catàleg de bombes i motors de fosa o alumini."); }
-            else if (pixelY >= 860 && pixelY < 1190) { openSubProductWindow("Distribuidores", "Gama completa de distribuïdors hidràulics robustos."); }
-            else if (pixelY >= 1190 && pixelY < 1520) { openSubProductWindow("Otros productos", "Detalls de vàlvules de seguretat, anivellament i blocs."); }
+            if (pixelY > 220 && pixelY < 550) { openSubProductWindow("Cilindros", "Filtre i especificacions de la línia completa de cilindres."); }
+            else if (pixelY >= 550 && pixelY < 880) { openSubProductWindow("Bombas y Motores", "Filtre i catàleg de bombes i motors de fosa o alumini."); }
+            else if (pixelY >= 880 && pixelY < 1210) { openSubProductWindow("Distribuidores", "Gama completa de distribuïdors hidràulics robustos."); }
+            else if (pixelY >= 1210 && pixelY < 1540) { openSubProductWindow("Otros productos", "Detalls de vàlvules de seguretat, anivellament i blocs."); }
           }
         } else if (!currentProductSubWindow) { const ridx = getLookedRoomLabel(); if (ridx !== -1) openLabelWindow(ridx); }
       }
