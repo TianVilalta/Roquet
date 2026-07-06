@@ -255,8 +255,53 @@ function getLookedCube() { camera.getWorldDirection(_fwd); camera.getWorldPositi
 function getLookedRoomLabel() { camera.getWorldDirection(_fwd); camera.getWorldPosition(_cam); let best = -1, bestDot = 0.7; for (let i = 0; i < roomLabels.length; i++) { _to.copy(roomLabels[i].mesh.position).sub(_cam).normalize(); const d = _fwd.dot(_to); if (d > bestDot) { bestDot = d; best = i; } } return best; }
 function openLabelWindow(ridx) {
   if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null; }
-  const info = roomLabels[ridx]; const p = info.mesh.position.clone(); const isProductsLabel = (info.text === 'Productes');
-  if (isProductsLabel && currentThemeIndex === 1) {
+  const info = roomLabels[ridx]; const p = info.mesh.position.clone();
+  if (info.text === 'Historia') {
+    const historyData = [
+      { year: "1940", text: "A finales de 1940 Roquet empezó con un pequeño taller de producción de gasógenos y reparación de maquinaria agrícola. El primer producto hidráulico era en realidad una máquina para producir pasta.", imgKey: null },
+      { year: "1960", text: "En los años 60 Roquet empezó a fabricar elevadores para los tractores Ebro, originalmente el Ford Thames.", imgKey: "ht1.png" },
+      { year: "1981", text: "En 1981 Roquet participa por la primera vez, y con una amplia gama de productos, en la feria de Hannover Messe y empieza a distribuir los productos en Europa, África y Australia.", imgKey: "ht2.png" },
+      { year: "2026", text: "Hoy en día, el Grupo Roquet dispone de más de 800 profesionales que trabajan en el diseño, production y distribución de una amplísima gama de componentes hidráulicos y de fundición.", imgKey: null }
+    ];
+    const imageLoader = new THREE.ImageLoader();
+    const loadedImages = {};
+    const imgPromises = historyData.filter(d => d.imgKey).map(d => {
+      return new Promise(res => imageLoader.load(d.imgKey, img => { loadedImages[d.imgKey] = img; res(); }, null, () => res()));
+    });
+    let logoImg = null;
+    imgPromises.push(new Promise(res => imageLoader.load('roquet.png', img => { logoImg = img; res(); }, null, () => res())));
+    Promise.all(imgPromises).then(() => {
+      const timelineGroup = new THREE.Group();
+      camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
+      const centerAngle = Math.atan2(_fwd.x, -_fwd.z);
+      const angles = [centerAngle - 0.75, centerAngle - 0.25, centerAngle + 0.25, centerAngle + 0.75];
+      const hRadius = 2.4;
+      historyData.forEach((data, index) => {
+        const cw = 700, ch = 800;
+        const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d');
+        ctx.beginPath(); ctx.moveTo(12+24,12); ctx.arcTo(cw-12,12,cw-12,ch-12,24); ctx.arcTo(cw-12,ch-12,12,ch-12,24); ctx.arcTo(12,ch-12,12,12,24); ctx.arcTo(12,12,cw-12,12,24); ctx.closePath();
+        ctx.fillStyle = 'rgba(10, 10, 10, 0.96)'; ctx.fill(); ctx.strokeStyle = '#333333'; ctx.lineWidth = 4; ctx.stroke();
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 50px Arial'; ctx.textAlign = 'left'; ctx.fillText(data.year, 50, 90);
+        if (logoImg) { ctx.drawImage(logoImg, cw - 210, 45, 160, 48); }
+        ctx.strokeStyle = '#e63946'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(50, 130); ctx.lineTo(cw - 50, 130); ctx.stroke();
+        let textY = 190;
+        if (data.imgKey && loadedImages[data.imgKey]) {
+          ctx.drawImage(loadedImages[data.imgKey], 50, 170, cw - 100, 280);
+          textY = 490;
+        }
+        ctx.fillStyle = '#dddddd'; ctx.font = '24px Arial'; ctx.textAlign = 'left';
+        wrapText(ctx, data.text, 50, textY, cw - 100, 34);
+        const wTex = new THREE.CanvasTexture(c);
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.15), new THREE.MeshBasicMaterial({ map: wTex, transparent: true, side: THREE.DoubleSide }));
+        const ang = angles[index];
+        const tx = Math.sin(ang) * hRadius; const tz = -Math.cos(ang) * hRadius;
+        mesh.position.set(tx, 1.2, tz);
+        camera.getWorldPosition(_cam); mesh.lookAt(_cam.x, 1.2, _cam.z);
+        timelineGroup.add(mesh);
+      });
+      roomGroup.add(timelineGroup); roomWindow = timelineGroup;
+    });
+  } else if (info.text === 'Productes' && currentThemeIndex === 1) {
     const cw = 1200, ch = 1600; const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d'); ctx.clearRect(0,0,cw,ch);
     const productsData = [
       { title: "Cilindros", imgKey: "cilindros.png", text: "Roquet ofrece cilindros hidráulicos para aplicaciones exigentes. La mayoría de nuestros cilindros tienen ejes templados con una resistencia a la corrosión muy alta. Los tubos se bruñen después de soldar las tomas, esto contribuye a la duración prolongada de las juntas y hace que la amortiguación, por pistón-toma, sea una opción viable. Desde el año 2004 en Dinacil el proceso de montaje es automatizado." },
@@ -321,7 +366,14 @@ function handleInput(frame) {
     }
     if (bPressed && !buttonStates.b) {
       if (guideOverlayVisible) { hideGuideOverlay(); } else if (state === 'room') {
-        if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (roomWindow.material && (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material])).forEach(m=>m.dispose()); roomWindow = null; }
+        if (roomWindow) {
+          if (roomWindow.isGroup) {
+            roomWindow.traverse(c => { c.geometry?.dispose(); if (c.material) { (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose()); } });
+          } else {
+            roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose());
+          }
+          roomGroup.remove(roomWindow); roomWindow = null;
+        }
         else { exitRoom(); }
       }
     }
@@ -342,9 +394,12 @@ function animate(time, frame) {
       const bp = labelBottomPlanes[i]; bp.position.x = c.mesh.position.clone().x; bp.position.z = c.mesh.position.clone().z; bp.material.opacity = 0.25 + 0.75 * c.prog; bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z); bp.rotateX(-0.12);
     }
   } else if (state === 'room') {
-    camera.getWorldPosition(_camPos2D); const looked = getLookedRoomLabel();
+    camera.getWorldPosition(_camPos2D); const looked = roomWindow ? -1 : getLookedRoomLabel();
     for (let i = 0; i < roomLabels.length; i++) {
-      const r = roomLabels[i]; r.prog += (((i === looked) ? 1 : 0) - r.prog) * 0.12; r.mesh.scale.setScalar(1 + 0.25 * r.prog); r.mesh.material.opacity = 0.4 + 0.6 * r.prog; r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
+      const r = roomLabels[i]; r.prog += (((i === looked) ? 1 : 0) - r.prog) * 0.12; r.mesh.scale.setScalar(1 + 0.25 * r.prog); r.mesh.material.opacity = roomWindow ? 0.0 : (0.4 + 0.6 * r.prog); r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
+    }
+    if (roomWindow && roomWindow.isGroup) {
+      roomWindow.children.forEach(mesh => { camera.getWorldPosition(_cam); mesh.lookAt(_cam.x, mesh.position.y, _cam.z); });
     }
   }
   handleInput(frame); renderer.render(scene, camera);
