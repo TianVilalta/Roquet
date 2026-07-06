@@ -140,7 +140,7 @@ const themes = [
   { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png', text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo', text2: '08551 Tona , Barcelona , España' },
   { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png', text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.', text2: '08551 Tona , Barcelona, España' },
   { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png', text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición', text2: '08510, Roda de Ter, Barcelona, España' },
-  { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png', text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.', text2: '08540 , Centelles, Barcelona, España' },
+  { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png', text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Production automatizada de cilindros hidráulicos pequeños.', text2: '08540 , Centelles, Barcelona, España' },
   { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png', text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.', text2: '107025 Aricestii Rahtivani , Prahova , Romania' },
   { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png', text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.', text2: '08500 , Vic, Barcelona, España' },
 ];
@@ -261,7 +261,7 @@ function openLabelWindow(ridx) {
       { year: "1940", text: "A finales de 1940 Roquet empezó con un pequeño taller de producción de gasógenos y reparación de maquinaria agrícola. El primer producto hidráulico era en realidad una máquina para producir pasta.", imgKey: null },
       { year: "1960", text: "En los años 60 Roquet empezó a fabricar elevadores para los tractores Ebro, originalmente el Ford Thames.", imgKey: "ht1.png" },
       { year: "1981", text: "En 1981 Roquet participa por la primera vez, y con una amplia gama de productos, en la feria de Hannover Messe y empieza a distribuir los productos en Europa, África y Australia.", imgKey: "ht2.png" },
-      { year: "2026", text: "Hoy en día, el Grupo Roquet dispone de más de 800 profesionales que trabajan en el diseño, production y distribución de una amplísima gama de componentes hidráulicos y de fundición.", imgKey: null }
+      { year: "2026", text: "Hoy en día, el Grupo Roquet dispone de más de 800 profesionales que trabajan en el diseño, producción y distribución de una amplísima gama de componentes hidráulicos y de fundición.", imgKey: null }
     ];
     const imageLoader = new THREE.ImageLoader();
     const loadedImages = {};
@@ -274,8 +274,23 @@ function openLabelWindow(ridx) {
       const timelineGroup = new THREE.Group();
       camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
       const centerAngle = Math.atan2(_fwd.x, -_fwd.z);
-      const angles = [centerAngle - 0.75, centerAngle - 0.25, centerAngle + 0.25, centerAngle + 0.75];
       const hRadius = 2.4;
+      const points = [];
+      const segments = 128;
+      for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        points.push(new THREE.Vector3(Math.sin(theta) * hRadius, 1.2, -Math.cos(theta) * hRadius));
+      }
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0xe63946, linewidth: 4 });
+      const circleLine = new THREE.LineLoop(lineGeo, lineMat);
+      timelineGroup.add(circleLine);
+      const angles = [
+        centerAngle - Math.PI * 0.45,
+        centerAngle - Math.PI * 0.15,
+        centerAngle + Math.PI * 0.15,
+        centerAngle + Math.PI * 0.45
+      ];
       historyData.forEach((data, index) => {
         const cw = 700, ch = 800;
         const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d');
@@ -299,7 +314,7 @@ function openLabelWindow(ridx) {
         camera.getWorldPosition(_cam); mesh.lookAt(_cam.x, 1.2, _cam.z);
         timelineGroup.add(mesh);
       });
-      roomGroup.add(timelineGroup); roomWindow = timelineGroup;
+      roomGroup.add(timelineGroup); timelineGroup.isGroup = true; roomWindow = timelineGroup;
     });
   } else if (info.text === 'Productes' && currentThemeIndex === 1) {
     const cw = 1200, ch = 1600; const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d'); ctx.clearRect(0,0,cw,ch);
@@ -399,7 +414,7 @@ function animate(time, frame) {
       const r = roomLabels[i]; r.prog += (((i === looked) ? 1 : 0) - r.prog) * 0.12; r.mesh.scale.setScalar(1 + 0.25 * r.prog); r.mesh.material.opacity = roomWindow ? 0.0 : (0.4 + 0.6 * r.prog); r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
     }
     if (roomWindow && roomWindow.isGroup) {
-      roomWindow.children.forEach(mesh => { camera.getWorldPosition(_cam); mesh.lookAt(_cam.x, mesh.position.y, _cam.z); });
+      roomWindow.children.forEach(mesh => { if (mesh.isMesh) { camera.getWorldPosition(_cam); mesh.lookAt(_cam.x, mesh.position.y, _cam.z); } });
     }
   }
   handleInput(frame); renderer.render(scene, camera);
