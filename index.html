@@ -202,7 +202,7 @@ for (let i = 0; i < themes.length; i++) {
   const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide }));
   bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, z); bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, 0);
   hubGroup.add(bmesh);
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }));
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide }));
   mesh.position.set(x, IMAGE_Y, z); mesh.lookAt(0, IMAGE_Y, 0); hubGroup.add(mesh);
   loader.load(theme.img, (texLoaded) => {
     mesh.material.map = texLoaded; mesh.material.needsUpdate = true;
@@ -261,7 +261,7 @@ function openLabelWindow(ridx) {
       { year: "1940", text: "A finales de 1940 Roquet empezó con un pequeño taller de producción de gasógenos y reparación de maquinaria agrícola. El primer producto hidráulico era en realidad una máquina para producir pasta.", imgKey: null },
       { year: "1960", text: "En los años 60 Roquet empezó a fabricar elevadores para los tractores Ebro, originalmente el Ford Thames.", imgKey: "ht1.png" },
       { year: "1981", text: "En 1981 Roquet participa por la primera vez, y con una amplia gama de productos, en la feria de Hannover Messe y empieza a distribuir los productos en Europa, África y Australia.", imgKey: "ht2.png" },
-      { year: "2026", text: "Hoy en día, el Grupo Roquet dispone de más de 800 profesionales que trabajan en el diseño, producción y distribución de una amplísima gama de componentes hidráulicos y de fundición.", imgKey: null }
+      { year: "2026", text: "Hoy en día, el Grupo Roquet dispone de más de 800 professionals que trabajan en el diseño, producción y distribución de una amplísima gama de componentes hidráulicos y de fundición.", imgKey: null }
     ];
     const imageLoader = new THREE.ImageLoader();
     const loadedImages = {};
@@ -275,16 +275,6 @@ function openLabelWindow(ridx) {
       camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
       const centerAngle = Math.atan2(_fwd.x, -_fwd.z);
       const hRadius = 2.4;
-      const points = [];
-      const segments = 128;
-      for (let i = 0; i <= segments; i++) {
-        const theta = (i / segments) * Math.PI * 2;
-        points.push(new THREE.Vector3(Math.sin(theta) * hRadius, 1.2, -Math.cos(theta) * hRadius));
-      }
-      const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-      const lineMat = new THREE.LineBasicMaterial({ color: 0xe63946, linewidth: 4 });
-      const circleLine = new THREE.LineLoop(lineGeo, lineMat);
-      timelineGroup.add(circleLine);
       const angles = [
         centerAngle - Math.PI * 0.45,
         centerAngle - Math.PI * 0.15,
