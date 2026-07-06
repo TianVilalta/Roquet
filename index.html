@@ -98,13 +98,6 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// Vector i elements auxiliars globals compartits
-const _fwd = new THREE.Vector3();
-const _cam = new THREE.Vector3();
-const _to  = new THREE.Vector3();
-const _camPos2D = new THREE.Vector3();
-const infoEl = document.getElementById('controllerInfo');
-
 // ─── RENDER ────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
@@ -212,6 +205,7 @@ new THREE.TextureLoader().load('roquet.png', (tex) => {
 });
 showGuideOverlay();
 
+// Llums realistes per al model 3D de fons (ara que és un model tridimensional)
 scene.add(new THREE.HemisphereLight(0xffffff, 0x555555, 2.5));
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
 dirLight.position.set(3, 8, 4);
@@ -222,7 +216,7 @@ scene.add(fillLight);
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
 
-// ─── HUD 3D subjecte a la càmera ───────────────────────────────────
+// ─── HUD 3D ────────────────────────────────────────────────────────────
 const hud3D = new THREE.Group();
 camera.add(hud3D);
 hud3D.position.set(0, -0.35, -0.9);
@@ -283,7 +277,7 @@ const ctrlMesh = new THREE.Mesh(
 // ─── TEMES ────────────────────────────────────────────────────────────
 const themes = [
   { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png',
-    text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo',
+    text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las functions corporativas para todo el grupo',
     text2: '08551 Tona , Barcelona , España' },
   { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png',
     text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.',
@@ -307,17 +301,24 @@ const ROOM_TARGET_HEIGHT = 12.0;
 const backgroundGroup = new THREE.Group();
 scene.add(backgroundGroup);
 
+function getThemeBackgroundAsset(theme) {
+  if (!theme?.img) return 'room.glb';
+  return theme.img.replace(/\.[^.]+$/, '.glb');
+}
+
 function loadRoomBackground(assetPath = 'room.glb') {
-  const safeAssetPath = 'room.glb';
-  if (backgroundGroup.children.length > 0) return;
+  // Evitem sobrecarregar si ja està carregat el mateix fons
+  if (backgroundGroup.userData.currentAsset === assetPath) return;
 
   const glLoader = new GLTFLoader();
   glLoader.load(
-    safeAssetPath,
+    assetPath,
     (gltf) => {
       const model = gltf.scene;
       clearGroup(backgroundGroup);
+      backgroundGroup.userData.currentAsset = assetPath;
 
+      // Configuració correcta dels materials PBR del model 3D (Standard en comptes de Basic)
       model.traverse((obj) => {
         if (obj.isMesh) {
           obj.castShadow = true;
@@ -341,7 +342,6 @@ function loadRoomBackground(assetPath = 'room.glb') {
                 stdMat.map.needsUpdate = true;
               }
               stdMat.needsUpdate = true;
-              m.dispose();
               return stdMat;
             });
             obj.material = Array.isArray(obj.material) ? newMats : newMats[0];
@@ -367,11 +367,11 @@ function loadRoomBackground(assetPath = 'room.glb') {
     },
     undefined,
     (error) => {
-      console.error(`No s'ha pogut carregar ${safeAssetPath}`, error);
+      console.error(`No s'ha pogut carregar el fons 3D: ${assetPath}`, error);
     }
   );
 }
-loadRoomBackground();
+loadRoomBackground('room.glb');
 
 // ─── HUB INITIAL ───────────────────────────────────────────────────────
 const hubGroup = new THREE.Group();
@@ -500,7 +500,11 @@ function clearGroup(g, preserveKey = '') {
 
 function buildRoom(themeIndex) {
   clearGroup(roomGroup);
-  loadRoomBackground('room.glb');
+  
+  const theme = themes[themeIndex];
+  if (theme) {
+    loadRoomBackground(getThemeBackgroundAsset(theme));
+  }
 
   roomLabels.length = 0;
   const labels = ['Historia', 'Productes', 'Grup'];
@@ -560,7 +564,10 @@ let state = 'hub';
 const buttonStates = {};
 const roomLabels = []; 
 let roomWindow = null;  
-let currentThemeIndex = -1;
+
+const _fwd = new THREE.Vector3();
+const _cam = new THREE.Vector3();
+const _to  = new THREE.Vector3();
 
 function getLookedCube() {
   camera.getWorldDirection(_fwd);
@@ -587,118 +594,29 @@ function getLookedRoomLabel() {
 }
 
 function openLabelWindow(ridx) {
-  if (roomWindow) { 
-    roomGroup.remove(roomWindow); 
-    roomWindow.geometry?.dispose(); 
-    (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); 
-    roomWindow = null; 
-  }
+  if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null; }
   const info = roomLabels[ridx];
   const p = info.mesh.position.clone();
   
-  if (info.text === 'Historia') {
-    const historyData = [
-      { year: "1940", text: "A finales de 1940 Roquet empezó con un pequeño taller de producción de gasógenos y reparación de maquinaria agrícola. El primer producto hidráulico era en realidad una máquina para producir pasta.", imgKey: null },
-      { year: "1960", text: "En los años 60 Roquet empezó a fabricar elevadores para los tractores Ebro, originalmente el Ford Thames.", imgKey: "ht1.png" },
-      { year: "1981", text: "En 1981 Roquet participa por la primera vez, y con una amplia gama de productos, en la feria de Hannover Messe y empieza a distribuir los productos en Europa, África y Australia.", imgKey: "ht2.png" },
-      { year: "2026", text: "Hoy en día, el Grupo Roquet dispone de más de 800 profesionales que trabajan en el diseño, producción y distribución de una amplísima gama de componentes hidráulicos y de fundición.", imgKey: null }
-    ];
-    
-    const imageLoader = new THREE.ImageLoader();
-    const loadedImages = {};
-    const imgPromises = historyData.filter(d => d.imgKey).map(d => {
-      return new Promise(res => imageLoader.load(d.imgKey, img => { loadedImages[d.imgKey] = img; res(); }, null, () => res()));
-    });
-    let logoImg = null;
-    imgPromises.push(new Promise(res => imageLoader.load('roquet.png', img => { logoImg = img; res(); }, null, () => res())));
-    
-    Promise.all(imgPromises).then(() => {
-      const timelineGroup = new THREE.Group();
-      camera.getWorldDirection(_fwd); _fwd.y = 0; _fwd.normalize();
-      const centerAngle = Math.atan2(_fwd.x, -_fwd.z);
-      
-      const hRadius = 1.65;
-      const angles = [
-        centerAngle - Math.PI * 0.45,
-        centerAngle - Math.PI * 0.15,
-        centerAngle + Math.PI * 0.15,
-        centerAngle + Math.PI * 0.45
-      ];
-      
-      historyData.forEach((data, index) => {
-        const cw = 700, ch = 800;
-        const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d');
-        ctx.beginPath(); ctx.moveTo(12+24,12); ctx.arcTo(cw-12,12,cw-12,ch-12,24); ctx.arcTo(cw-12,ch-12,12,ch-12,24); ctx.arcTo(12,ch-12,12,12,24); ctx.arcTo(12,12,cw-12,12,24); ctx.closePath();
-        ctx.fillStyle = 'rgba(10, 10, 10, 0.96)'; ctx.fill(); ctx.strokeStyle = '#333333'; ctx.lineWidth = 4; ctx.stroke();
-        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 50px Arial'; ctx.textAlign = 'left'; ctx.fillText(data.year, 50, 90);
-        if (logoImg) { ctx.drawImage(logoImg, cw - 210, 45, 160, 48); }
-        
-        ctx.strokeStyle = '#333333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(50, 130); ctx.lineTo(cw - 50, 130); ctx.stroke();
-        
-        let textY = 190;
-        if (data.imgKey && loadedImages[data.imgKey]) {
-          ctx.drawImage(loadedImages[data.imgKey], 50, 170, cw - 100, 280);
-          textY = 490;
-        }
-        ctx.fillStyle = '#dddddd'; ctx.font = '24px Arial'; ctx.textAlign = 'left';
-        wrapText(ctx, data.text, 50, textY, cw - 100, 34);
-        
-        const wTex = new THREE.CanvasTexture(c);
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.15), new THREE.MeshBasicMaterial({ map: wTex, transparent: true, side: THREE.DoubleSide }));
-        const ang = angles[index];
-        const tx = Math.sin(ang) * hRadius; const tz = -Math.cos(ang) * hRadius;
-        mesh.position.set(tx, 1.2, tz);
-        camera.getWorldPosition(_cam); mesh.lookAt(_cam.x, 1.2, _cam.z);
-        timelineGroup.add(mesh);
-      });
-      roomGroup.add(timelineGroup); timelineGroup.isGroup = true; roomWindow = timelineGroup;
-    });
-  } else if (info.text === 'Productes' && currentThemeIndex === 1) {
-    const cw = 1200, ch = 1600; const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d'); ctx.clearRect(0,0,cw,ch);
-    const productsData = [
-      { title: "Cilindros", imgKey: "cilindros.png", text: "Roquet ofrece cilindros hidráulicos para aplicaciones exigentes..." },
-      { title: "Bombas y Motores", imgKey: "bombasymotores.png", text: "Roquet produce bombas y motores de aluminio y fundición..." },
-      { title: "Distribuidores", imgKey: "distribuidores.png", text: "Roquet dispone de una amplia gama de distribuidores estándar..." },
-      { title: "Otros productos", imgKey: "otros.png", text: "Aparte de los 3 grupos principales de productos, Roquet también desarrolla..." }
-    ];
-    const imageLoader = new THREE.ImageLoader();
-    const wTex = new THREE.CanvasTexture(c);
-    const promises = [
-      new Promise(res => imageLoader.load('roquet.png', img => res({key:'logo', img}), null, () => res({key:'logo', img:null}))),
-      ...productsData.map(prod => new Promise(res => imageLoader.load(prod.imgKey, img => res({key:prod.imgKey, img}), null, () => res({key:prod.imgKey, img:null}))))
-    ];
-    Promise.all(promises).then(results => {
-      const imgMap = {}; results.forEach(r => { if(r.img) imgMap[r.key] = r.img; });
-      ctx.beginPath(); ctx.moveTo(12+28,12); ctx.arcTo(cw-12,12,cw-12,ch-12,28); ctx.arcTo(cw-12,ch-12,12,ch-12,28); ctx.arcTo(12,ch-12,12,12,28); ctx.arcTo(12,12,cw-12,12,28); ctx.closePath(); ctx.fillStyle = 'rgba(10, 10, 10, 0.96)'; ctx.fill(); ctx.strokeStyle = '#333333'; ctx.lineWidth = 4; ctx.stroke();
-      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 46px Arial'; ctx.textAlign = 'left'; ctx.fillText('En constante innovación', 60, 90);
-      if (imgMap['logo']) { ctx.drawImage(imgMap['logo'], cw - 260, 45, 200, 60); }
-      let startY = 220; const rowHeight = 330;
-      productsData.forEach((prod, index) => {
-        const rowImage = imgMap[prod.imgKey];
-        if (rowImage) { ctx.drawImage(rowImage, 60, startY + 20, 300, 220); }
-        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'left'; ctx.fillText(prod.title, 400, startY + 50);
-        ctx.fillStyle = '#bbbbbb'; ctx.font = '19px Arial'; ctx.textAlign = 'left'; wrapText(ctx, prod.text, 400, startY + 105, 740, 26);
-        startY += rowHeight;
-      });
-      wTex.needsUpdate = true;
-    });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.4), new THREE.MeshBasicMaterial({ map: wTex, transparent: true, side: THREE.DoubleSide }));
-    camera.getWorldPosition(_cam); const dir = _cam.clone().sub(p).normalize(); const frontPos = p.clone().add(dir.multiplyScalar(0.5));
-    mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); roomGroup.add(mesh); roomWindow = mesh;
-  } else {
-    const cw = 1024, ch = 512; const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d'); ctx.clearRect(0,0,cw,ch);
-    ctx.beginPath(); ctx.moveTo(12+24,12); ctx.arcTo(cw-12,12,cw-12,ch-12,24); ctx.arcTo(cw-12,ch-12,12,ch-12,24); ctx.arcTo(12,ch-12,12,12,24); ctx.arcTo(12,12,cw-12,12,24); ctx.closePath(); ctx.fillStyle='rgba(255,255,255,0.98)'; ctx.fill();
-    ctx.fillStyle = '#111111'; ctx.font = 'bold 64px Arial'; ctx.textAlign='center'; ctx.fillText(info.text, cw/2, ch/2);
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, side: THREE.DoubleSide }));
-    camera.getWorldPosition(_cam); const dir = _cam.clone().sub(p).normalize(); const frontPos = p.clone().add(dir.multiplyScalar(0.6));
-    mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); roomGroup.add(mesh); roomWindow = mesh;
-  }
+  const cw = 1024, ch = 512;
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,cw,ch);
+  ctx.beginPath(); ctx.moveTo(12+24,12); ctx.arcTo(cw-12,12,cw-12,ch-12,24); ctx.arcTo(cw-12,ch-12,12,ch-12,24); ctx.arcTo(12,ch-12,12,12,24); ctx.arcTo(12,12,cw-12,12,24); ctx.closePath();
+  ctx.fillStyle='rgba(255,255,255,0.98)'; ctx.fill();
+  ctx.fillStyle = '#111111'; ctx.font = 'bold 64px Arial'; ctx.textAlign='center'; ctx.fillText(info.text, cw/2, ch/2);
+  
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, side: THREE.DoubleSide }));
+  camera.getWorldPosition(_cam); const dir = _cam.clone().sub(p).normalize(); const frontPos = p.clone().add(dir.multiplyScalar(0.6));
+  mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); roomGroup.add(mesh); roomWindow = mesh;
 }
 
-function enterRoom(idx) { currentThemeIndex = idx; buildRoom(idx); hubGroup.visible = false; roomGroup.visible = true; state = 'room'; }
-function exitRoom() { clearGroup(roomGroup); roomGroup.visible = false; hubGroup.visible = true; loadRoomBackground('room.glb'); state = 'hub'; currentThemeIndex = -1; }
+function enterRoom(idx) { buildRoom(idx); hubGroup.visible = false; roomGroup.visible = true; state = 'room'; }
+function exitRoom() { clearGroup(roomGroup); roomGroup.visible = false; hubGroup.visible = true; loadRoomBackground('room.glb'); state = 'hub'; }
 
 // ─── CONTROLADORS INPUT ───────────────────────────────────────────────
+const infoEl = document.getElementById('controllerInfo');
+
 function handleInput(frame) {
   const session = renderer.xr.getSession(); if (!session) return;
   const refSpace = renderer.xr.getReferenceSpace(); let infoText = 'Posició dels mandos:\n'; let anyController = false;
@@ -723,11 +641,7 @@ function handleInput(frame) {
     if (bPressed && !buttonStates.b) {
       if (guideOverlayVisible) { hideGuideOverlay(); } else if (state === 'room') {
         if (roomWindow) {
-          if (roomWindow.isGroup) {
-            roomWindow.traverse(c => { c.geometry?.dispose(); if (c.material) { (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose()); } });
-          } else {
-            roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose());
-          }
+          roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose());
           roomGroup.remove(roomWindow); roomWindow = null;
         } else { exitRoom(); }
       }
@@ -738,6 +652,8 @@ function handleInput(frame) {
 }
 
 // ─── LOOP PRINCIPAL D'ANIMACIÓ ─────────────────────────────────────────
+const _camPos2D = new THREE.Vector3();
+
 function detectHeadsetResumeFromFrameGap(time, frame) {
   if (!renderer.xr.getSession() || !frame) { lastXRFrameTime = null; return; }
   if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToHubWithGuide(); }
@@ -769,9 +685,6 @@ function animate(time, frame) {
       r.mesh.scale.setScalar(1 + 0.25 * r.prog);
       r.mesh.material.opacity = roomWindow ? 0.0 : (0.4 + 0.6 * r.prog);
       r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
-    }
-    if (roomWindow && roomWindow.isGroup) {
-      roomWindow.children.forEach(mesh => { if (mesh.isMesh) { camera.getWorldPosition(_cam); mesh.lookAt(_cam.x, mesh.position.y, _cam.z); } });
     }
   }
 
