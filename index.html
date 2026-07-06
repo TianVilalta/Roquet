@@ -258,24 +258,35 @@ function openLabelWindow(ridx) {
   const info = roomLabels[ridx]; const p = info.mesh.position.clone(); const isProductsLabel = (info.text === 'Productes');
   if (isProductsLabel && currentThemeIndex === 1) {
     const cw = 1200, ch = 1600; const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d'); ctx.clearRect(0,0,cw,ch);
-    ctx.beginPath(); ctx.moveTo(12+28,12); ctx.arcTo(cw-12,12,cw-12,ch-12,28); ctx.arcTo(cw-12,ch-12,12,ch-12,28); ctx.arcTo(12,ch-12,12,12,28); ctx.arcTo(12,12,cw-12,12,28); ctx.closePath(); ctx.fillStyle = 'rgba(10, 10, 10, 0.96)'; ctx.fill(); ctx.strokeStyle = '#333333'; ctx.lineWidth = 4; ctx.stroke();
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 46px Arial'; ctx.textAlign = 'left'; ctx.fillText('En constante innovación', 60, 90); ctx.fillStyle = '#aaaaaa'; ctx.font = '22px Arial'; ctx.fillText('En la actualidad El Grupo Roquet apuesta, más que nunca, por el desarrollo de nuevos productos.', 60, 135);
     const productsData = [
       { title: "Cilindros", imgKey: "cilindros.png", text: "Roquet ofrece cilindros hidráulicos para aplicaciones exigentes. La mayoría de nuestros cilindros tienen ejes templados con una resistencia a la corrosión muy alta. Los tubos se bruñen después de soldar las tomas, esto contribuye a la duración prolongada de las juntas y hace que la amortiguación, por pistón-toma, sea una opción viable. Desde el año 2004 en Dinacil el proceso de montaje es automatizado." },
       { title: "Bombas y Motores", imgKey: "bombasymotores.png", text: "Roquet produce bombas y motores de aluminio y fundición, desde 0.33cm3/rev. hasta 150cm3/rev. Los cuerpos de fundición salen de la fundición propia de la empresa. Estos cuerpos reducen el sonido, incrementan la vida del producto, etc. Roquet tiene una cámara anecoica, en ella se puede comprobar que el perfil de los engranajes ha sido optimizado para niveles de ruido más bajos." },
       { title: "Distribuidores", imgKey: "distribuidores.png", text: "Roquet dispone de una amplia gama de distribuidores estándar y desarrolla nuevos modelos para aplicaciones específicas. En el pasado, los distribuidores Roquet eran conocidos por ser robustos y de confianza. Últimamente hemos desarrollado válvulas más sofisticadas para cumplir con los requisitos de nuestros clientes." },
       { title: "Otros productos", imgKey: "otros.png", text: "Aparte de los 3 grupos principales de productos, Roquet también desarrolla válvulas y sistemas, para aplicaciones específicas, donde la experiencia, con una amplia gama de diferentes componentes hidráulicos, se puede combinar para desarrollar una solución interesante. Por ejemplo válvulas de nivelación, válvulas de marcado agrícolas, grupos electrógenos compactos, actuadores electrohidráulicos, etc." }
     ];
-    let startY = 220; const rowHeight = 330; const wTex = new THREE.CanvasTexture(c);
-    new THREE.ImageLoader().load('roquet.png', (logoImg) => { ctx.drawImage(logoImg, cw - 260, 45, 200, 60); wTex.needsUpdate = true; });
-    productsData.forEach((prod, index) => {
-      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'left'; ctx.fillText(prod.title, 400, startY + 40);
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(400, startY + 65, 230, 42); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.fillText('VER PRODUCTOS', 515, startY + 91);
-      ctx.fillStyle = '#bbbbbb'; ctx.font = '19px Arial'; ctx.textAlign = 'left'; wrapText(ctx, prod.text, 400, startY + 145, 740, 26);
-      new THREE.ImageLoader().load(prod.imgKey, (image) => { ctx.drawImage(image, 60, startY + 20, 300, 220); wTex.needsUpdate = true; }, undefined, () => { ctx.fillStyle = '#222222'; ctx.fillRect(60, startY + 20, 300, 220); ctx.fillStyle = '#555555'; ctx.font = '16px Arial'; ctx.textAlign = 'center'; ctx.fillText(prod.imgKey, 210, startY + 130); wTex.needsUpdate = true; });
-      if (index < 3) { ctx.strokeStyle = '#222222'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(60, startY + rowHeight - 10); ctx.lineTo(cw - 60, startY + rowHeight - 10); ctx.stroke(); }
-      startY += rowHeight;
+    const imageLoader = new THREE.ImageLoader();
+    const promises = [
+      new Promise(res => imageLoader.load('roquet.png', img => res({key:'logo', img}), null, () => res({key:'logo', img:null}))),
+      ...productsData.map(prod => new Promise(res => imageLoader.load(prod.imgKey, img => res({key:prod.imgKey, img}), null, () => res({key:prod.imgKey, img:null}))))
+    ];
+    Promise.all(promises).then(results => {
+      const imgMap = {}; results.forEach(r => { if(r.img) imgMap[r.key] = r.img; });
+      ctx.beginPath(); ctx.moveTo(12+28,12); ctx.arcTo(cw-12,12,cw-12,ch-12,28); ctx.arcTo(cw-12,ch-12,12,ch-12,28); ctx.arcTo(12,ch-12,12,12,28); ctx.arcTo(12,12,cw-12,12,28); ctx.closePath(); ctx.fillStyle = 'rgba(10, 10, 10, 0.96)'; ctx.fill(); ctx.strokeStyle = '#333333'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 46px Arial'; ctx.textAlign = 'left'; ctx.fillText('En constante innovación', 60, 90); ctx.fillStyle = '#aaaaaa'; ctx.font = '22px Arial'; ctx.fillText('En la actualidad El Grupo Roquet apuesta, más que nunca, por el desarrollo de nuevos productos.', 60, 135);
+      if (imgMap['logo']) { ctx.drawImage(imgMap['logo'], cw - 260, 45, 200, 60); }
+      let startY = 220; const rowHeight = 330;
+      productsData.forEach((prod, index) => {
+        const rowImage = imgMap[prod.imgKey];
+        if (rowImage) { ctx.drawImage(rowImage, 60, startY + 20, 300, 220); } else { ctx.fillStyle = '#222222'; ctx.fillRect(60, startY + 20, 300, 220); ctx.fillStyle = '#555555'; ctx.font = '16px Arial'; ctx.textAlign = 'center'; ctx.fillText(prod.imgKey, 210, startY + 130); }
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'left'; ctx.fillText(prod.title, 400, startY + 50);
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(400, startY + 75, 230, 42); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.fillText('VER PRODUCTOS', 515, startY + 101);
+        ctx.fillStyle = '#bbbbbb'; ctx.font = '19px Arial'; ctx.textAlign = 'left'; wrapText(ctx, prod.text, 400, startY + 155, 740, 26);
+        if (index < 3) { ctx.strokeStyle = '#222222'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(60, startY + rowHeight - 10); ctx.lineTo(cw - 60, startY + rowHeight - 10); ctx.stroke(); }
+        startY += rowHeight;
+      });
+      wTex.needsUpdate = true;
     });
+    const wTex = new THREE.CanvasTexture(c);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.4), new THREE.MeshBasicMaterial({ map: wTex, transparent: true, side: THREE.DoubleSide }));
     camera.getWorldPosition(_cam); const dir = _cam.clone().sub(p).normalize(); const frontPos = p.clone().add(dir.multiplyScalar(0.5));
     mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); mesh.userData = { isProductsList: true }; roomGroup.add(mesh); roomWindow = mesh;
