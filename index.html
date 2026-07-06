@@ -249,12 +249,12 @@ if (navigator.xr) {
     if (supported) { statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó.'; document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor', 'bounded-floor'] })); } else { statusEl.textContent = 'VR no suportat. Obre per HTTPS al Meta Quest Browser.'; }
   }).catch(err => { statusEl.textContent = 'Error VR: ' + err.message; });
 } else { statusEl.textContent = 'WebXR no disponible. Fes servir el Meta Quest Browser.'; }
-let state = 'hub'; const buttonStates = {}; const roomLabels = []; let roomWindow = null; let currentProductSubWindow = null;
+let state = 'hub'; const buttonStates = {}; const roomLabels = []; let roomWindow = null;
 const _fwd = new THREE.Vector3(); const _cam = new THREE.Vector3(); const _to = new THREE.Vector3();
 function getLookedCube() { camera.getWorldDirection(_fwd); camera.getWorldPosition(_cam); let best = -1, bestDot = 0.72; for (let i = 0; i < cubes.length; i++) { _to.copy(cubes[i].mesh.position).sub(_cam).normalize(); const d = _fwd.dot(_to); if (d > bestDot) { bestDot = d; best = i; } } return best; }
 function getLookedRoomLabel() { camera.getWorldDirection(_fwd); camera.getWorldPosition(_cam); let best = -1, bestDot = 0.7; for (let i = 0; i < roomLabels.length; i++) { _to.copy(roomLabels[i].mesh.position).sub(_cam).normalize(); const d = _fwd.dot(_to); if (d > bestDot) { bestDot = d; best = i; } } return best; }
 function openLabelWindow(ridx) {
-  if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null; currentProductSubWindow = null; }
+  if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null; }
   const info = roomLabels[ridx]; const p = info.mesh.position.clone(); const isProductsLabel = (info.text === 'Productes');
   if (isProductsLabel && currentThemeIndex === 1) {
     const cw = 1200, ch = 1600; const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d'); ctx.clearRect(0,0,cw,ch);
@@ -262,7 +262,7 @@ function openLabelWindow(ridx) {
       { title: "Cilindros", imgKey: "cilindros.png", text: "Roquet ofrece cilindros hidráulicos para aplicaciones exigentes. La mayoría de nuestros cilindros tienen ejes templados con una resistencia a la corrosión muy alta. Los tubos se bruñen después de soldar las tomas, esto contribuye a la duración prolongada de las juntas y hace que la amortiguación, por pistón-toma, sea una opción viable. Desde el año 2004 en Dinacil el proceso de montaje es automatizado." },
       { title: "Bombas y Motores", imgKey: "bombasymotores.png", text: "Roquet produce bombas y motores de aluminio y fundición, desde 0.33cm3/rev. hasta 150cm3/rev. Los cuerpos de fundición salen de la fundición propia de la empresa. Estos cuerpos reducen el sonido, incrementan la vida del producto, etc. Roquet tiene una cámara anecoica, en ella se puede comprobar que el perfil de los engranajes ha sido optimizado para niveles de ruido más bajos." },
       { title: "Distribuidores", imgKey: "distribuidores.png", text: "Roquet dispone de una amplia gama de distribuidores estándar y desarrolla nuevos modelos para aplicaciones específicas. En el pasado, los distribuidores Roquet eran conocidos por ser robustos y de confianza. Últimamente hemos desarrollado válvulas más sofisticadas para cumplir con los requisitos de nuestros clientes." },
-      { title: "Otros productos", imgKey: "otros.png", text: "Aparte de los 3 grupos principales de productos, Roquet también desarrolla válvulas y sistemas, para aplicaciones específicas, donde la experiencia, con una amplia gama de diferentes componentes hidráulicos, se puede combinar para desarrollar una solución interesante. Por ejemplo válvulas de nivelación, válvulas de marcado agrícolas, grupos electrógenos compactos, actuadores electrohidráulicos, etc." }
+      { title: "Otros productos", imgKey: "otros.png", text: "Aparte de los 3 grupos principales de productos, Roquet también desarrolla válvulas y sistemas, para aplicaciones específicas, donde la experiencia, con una amplia gama de differentes componentes hidráulicos, se puede combinar para desarrollar una solución interesante. Por ejemplo válvulas de nivelación, válvulas de marcado agrícolas, grupos electrógenos compactos, actuadores electrohidráulicos, etc." }
     ];
     const imageLoader = new THREE.ImageLoader();
     const promises = [
@@ -279,8 +279,7 @@ function openLabelWindow(ridx) {
         const rowImage = imgMap[prod.imgKey];
         if (rowImage) { ctx.drawImage(rowImage, 60, startY + 20, 300, 220); } else { ctx.fillStyle = '#222222'; ctx.fillRect(60, startY + 20, 300, 220); ctx.fillStyle = '#555555'; ctx.font = '16px Arial'; ctx.textAlign = 'center'; ctx.fillText(prod.imgKey, 210, startY + 130); }
         ctx.fillStyle = '#ffffff'; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'left'; ctx.fillText(prod.title, 400, startY + 50);
-        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(400, startY + 75, 230, 42); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.fillText('VER PRODUCTOS', 515, startY + 101);
-        ctx.fillStyle = '#bbbbbb'; ctx.font = '19px Arial'; ctx.textAlign = 'left'; wrapText(ctx, prod.text, 400, startY + 155, 740, 26);
+        ctx.fillStyle = '#bbbbbb'; ctx.font = '19px Arial'; ctx.textAlign = 'left'; wrapText(ctx, prod.text, 400, startY + 105, 740, 26);
         if (index < 3) { ctx.strokeStyle = '#222222'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(60, startY + rowHeight - 10); ctx.lineTo(cw - 60, startY + rowHeight - 10); ctx.stroke(); }
         startY += rowHeight;
       });
@@ -289,24 +288,14 @@ function openLabelWindow(ridx) {
     const wTex = new THREE.CanvasTexture(c);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.4), new THREE.MeshBasicMaterial({ map: wTex, transparent: true, side: THREE.DoubleSide }));
     camera.getWorldPosition(_cam); const dir = _cam.clone().sub(p).normalize(); const frontPos = p.clone().add(dir.multiplyScalar(0.5));
-    mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); mesh.userData = { isProductsList: true }; roomGroup.add(mesh); roomWindow = mesh;
+    mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); roomGroup.add(mesh); roomWindow = mesh;
   } else {
     const cw = 1024, ch = 512; const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d'); ctx.clearRect(0,0,cw,ch);
     ctx.fillStyle='rgba(255,255,255,0.98)'; ctx.fillRect(12,12,cw-24,ch-24); ctx.fillStyle = '#111111'; ctx.font = 'bold 54px Arial'; ctx.textAlign='center'; ctx.fillText(info.text, cw/2, ch/2);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, side: THREE.DoubleSide }));
     camera.getWorldPosition(_cam); const dir = _cam.clone().sub(p).normalize(); const frontPos = p.clone().add(dir.multiplyScalar(0.6));
-    mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); mesh.userData = { isProductsList: false }; roomGroup.add(mesh); roomWindow = mesh;
+    mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); roomGroup.add(mesh); roomWindow = mesh;
   }
-}
-function openSubProductWindow(title, details) {
-  if (!roomWindow) return;
-  const cw = 1024, ch = 512; const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d');
-  ctx.fillStyle = 'rgba(12, 12, 12, 0.98)'; ctx.fillRect(0,0,cw,ch); ctx.strokeStyle = '#444'; ctx.lineWidth = 6; ctx.strokeRect(10,10,cw-20,ch-20);
-  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 52px Arial'; ctx.textAlign = 'center'; ctx.fillText(title, cw/2, 120);
-  ctx.fillStyle = '#cccccc'; ctx.font = '24px Arial'; wrapText(ctx, "Finestra de subproducte: " + details, cw/2 - 380, 240, 760, 36);
-  ctx.fillStyle = '#888888'; ctx.font = '18px Arial'; ctx.fillText("Prem 'B' per tornar al llistat de productes", cw/2, 440);
-  roomWindow.material.map.dispose(); roomWindow.material.map = new THREE.CanvasTexture(c); roomWindow.material.needsUpdate = true;
-  roomWindow.geometry.dispose(); roomWindow.geometry = new THREE.PlaneGeometry(1.6, 0.8); roomWindow.userData.isProductsList = false; currentProductSubWindow = true;
 }
 function enterRoom(idx) { buildRoom(idx); hubGroup.visible = false; roomGroup.visible = true; state = 'room'; }
 function exitRoom() { clearGroup(roomGroup); roomGroup.visible = false; hubGroup.visible = true; loadRoomBackground('room.glb'); state = 'hub'; currentThemeIndex = -1; }
@@ -327,23 +316,12 @@ function handleInput(frame) {
     const gp = src.gamepad; const aPressed = gp.buttons[4]?.pressed; const bPressed = gp.buttons[5]?.pressed;
     if (aPressed && !buttonStates.a) {
       if (guideOverlayVisible) { hideGuideOverlay(); } else if (state === 'hub') { const idx = getLookedCube(); if (idx !== -1) enterRoom(idx); } else if (state === 'room') {
-        if (roomWindow && roomWindow.userData.isProductsList) {
-          camera.getWorldDirection(_fwd); camera.getWorldPosition(_cam);
-          const intersects = new THREE.Raycaster(_cam, _fwd).intersectObject(roomWindow);
-          if (intersects.length > 0) {
-            const pixelY = (1 - intersects[0].uv.y) * 1600;
-            if (pixelY > 220 && pixelY < 550) { openSubProductWindow("Cilindros", "Filtre i especificacions de la línia completa de cilindres."); }
-            else if (pixelY >= 550 && pixelY < 880) { openSubProductWindow("Bombas y Motores", "Filtre i catàleg de bombes i motors de fosa o alumini."); }
-            else if (pixelY >= 880 && pixelY < 1210) { openSubProductWindow("Distribuidores", "Gama completa de distribuïdors hidràulics robustos."); }
-            else if (pixelY >= 1210 && pixelY < 1540) { openSubProductWindow("Otros productos", "Detalls de vàlvules de seguretat, anivellament i blocs."); }
-          }
-        } else if (!currentProductSubWindow) { const ridx = getLookedRoomLabel(); if (ridx !== -1) openLabelWindow(ridx); }
+        if (!roomWindow) { const ridx = getLookedRoomLabel(); if (ridx !== -1) openLabelWindow(ridx); }
       }
     }
     if (bPressed && !buttonStates.b) {
       if (guideOverlayVisible) { hideGuideOverlay(); } else if (state === 'room') {
-        if (currentProductSubWindow) { const pIdx = roomLabels.findIndex(l => l.text === 'Productes'); openLabelWindow(pIdx !== -1 ? pIdx : 1); }
-        else if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (roomWindow.material && (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material])).forEach(m=>m.dispose()); roomWindow = null; }
+        if (roomWindow) { roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (roomWindow.material && (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material])).forEach(m=>m.dispose()); roomWindow = null; }
         else { exitRoom(); }
       }
     }
