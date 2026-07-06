@@ -104,7 +104,7 @@ renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
+renderer.toneMappingExposure = 1.2;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 renderer.xr.addEventListener('sessionstart', () => {
@@ -118,12 +118,14 @@ renderer.xr.addEventListener('sessionend', () => {
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0a0a);
+scene.background = new THREE.Color(0x111111);
 
+// Ambient indirecte realista per a objectes i entorns 3D tridimensionals
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+// Hem pujat el límit "far" de 100 a 300 perquè la càmera no talli el fons 3D si és molt gran
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 300);
 
 const guideOverlayGroup = new THREE.Group();
 camera.add(guideOverlayGroup);
@@ -205,19 +207,18 @@ new THREE.TextureLoader().load('roquet.png', (tex) => {
 });
 showGuideOverlay();
 
-// ─── IL·LUMINACIÓ REALISTA PER AL FONS 3D ──────────────────────────────
-// Passem d'una il·luminació plana a una de tridimensional amb llums direccionals encreuades
-scene.add(new THREE.HemisphereLight(0xffffff, 0x555555, 2.5));
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
-dirLight.position.set(3, 8, 4);
+// ─── IL·LUMINACIÓ COMPLETA PER A ESCENES 3D REALS ─────────────────────
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.0));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+dirLight.position.set(5, 12, 6);
 scene.add(dirLight);
-const fillLight = new THREE.DirectionalLight(0xffffff, 1.2);
-fillLight.position.set(-4, 4, -3);
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+fillLight.position.set(-5, 6, -6);
 scene.add(fillLight);
-const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+const ambient = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambient);
 
-// ─── HUD 3D SUBJECTE A LA CÀMERA ───────────────────────────────────────
+// ─── HUD 3D ────────────────────────────────────────────────────────────
 const hud3D = new THREE.Group();
 camera.add(hud3D);
 hud3D.position.set(0, -0.35, -0.9);
@@ -297,8 +298,8 @@ const themes = [
     text2: '08500 , Vic, Barcelona, España' },
 ];
 
-// ─── CORRECCIÓ DE CÀRREGA DEL FONS 3D GLB ──────────────────────────────
-const ROOM_TARGET_HEIGHT = 12.0;
+// ─── FONS REAL EN 3D (CÀRREGA DE MODEL DIRECTE SENSE DESTRUIR MATERIALS) ───
+const ROOM_TARGET_HEIGHT = 12.0; 
 const backgroundGroup = new THREE.Group();
 scene.add(backgroundGroup);
 
@@ -315,32 +316,21 @@ function loadRoomBackground(assetPath = 'room.glb') {
       const model = gltf.scene;
       clearGroup(backgroundGroup);
 
-      // CORRECCIÓ CRÍTICA: Utilitzem MeshStandardMaterial perquè el model tridimensional no es vegi negre i reaccioni a les llums reals
+      // SOLUCIÓ DEFINITIVA: No toquem ni destruïm els materials originals del GLB. 
+      // Només activem la capacitat de rebre i projectar llums direccionals i ambientals.
       model.traverse((obj) => {
-        if (obj.isMesh && obj.material) {
-          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-          const newMats = mats.map((m) => {
-            const standardMat = new THREE.MeshStandardMaterial({
-              map: m.map || null,
-              color: m.map ? 0xffffff : (m.color || 0xffffff),
-              side: THREE.DoubleSide,
-              roughness: 0.6,
-              metalness: 0.1,
-              transparent: !!m.transparent,
-              opacity: m.opacity !== undefined ? m.opacity : 1,
-            });
-            if (standardMat.map) {
-              standardMat.map.colorSpace = THREE.SRGBColorSpace;
-              standardMat.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
-              standardMat.map.needsUpdate = true;
-            }
-            m.dispose();
-            return standardMat;
-          });
-          obj.material = Array.isArray(obj.material) ? newMats : newMats[0];
+        if (obj.isMesh) {
+          obj.castShadow = true;
+          obj.receiveShadow = true;
+          
+          // Assegurem que l'espai de color de les textures del GLB sigui l'adequat si existeix
+          if (obj.material && obj.material.map) {
+            obj.material.map.colorSpace = THREE.SRGBColorSpace;
+          }
         }
       });
 
+      // Centrat i escalat automàtic del teu fons 3D perquè s'ajusti a l'entorn de realitat virtual
       const box = new THREE.Box3().setFromObject(model);
       const size = new THREE.Vector3();
       box.getSize(size);
@@ -353,22 +343,27 @@ function loadRoomBackground(assetPath = 'room.glb') {
       model.position.x -= center.x;
       model.position.z -= center.z;
       model.position.y -= box.min.y;
-      model.position.y -= 4.5;
+      model.position.y -= 4.5; // Ajust al nivell dels ulls de l'usuari en VR
       model.rotation.y = Math.PI;
 
       backgroundGroup.add(model);
+      
+      const s = document.getElementById('status');
+      if (s) s.textContent = 'Fons 3D carregat correctament.';
     },
     undefined,
     (error) => {
       console.error(`No s'ha pogut carregar ${assetPath}`, error);
       const s = document.getElementById('status');
-      if (s) { s.textContent = `No s'ha pogut carregar ${assetPath} (fons)`; s.style.color = '#f66'; }
+      if (s) { s.textContent = `No s'ha trobat el model 3D: ${assetPath}`; s.style.color = '#f66'; }
     }
   );
 }
-loadRoomBackground();
 
-// ─── HUB: SALA INICIAL AMB 6 IMATGES ─────────────────────────────────────
+// Carreguem el fons 3D inicial general
+loadRoomBackground('room.glb');
+
+// ─── HUB INICIAL AMB LES PANELES FLOTANTS ────────────────────────────────
 const hubGroup = new THREE.Group();
 scene.add(hubGroup);
 
@@ -400,8 +395,6 @@ for (let i = 0; i < themes.length; i++) {
   bc.fillStyle = '#111111';
   bc.font = 'bold 40px Arial';
   bc.textAlign = 'center';
-  bc.shadowColor = 'rgba(0,0,0,0.4)';
-  bc.shadowBlur = 8;
   
   function drawWrappedTextCentered(ctx, text, centerX, maxWidth, lineHeight) {
     ctx.textBaseline = 'middle';
@@ -456,31 +449,13 @@ for (let i = 0; i < themes.length; i++) {
     const imgPos = mesh.position.clone();
     bmesh.position.set(imgPos.x, bY, imgPos.z);
     bmesh.lookAt(0, bY, 0);
-    bmesh.userData.labelY = bY;
   });
 
   cubes.push({ mesh, index: i, prog: 0 });
   labelBottomPlanes.push(bmesh);
 }
 
-function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-  const words = text.split(' ');
-  let line = '';
-  for (let n = 0; n < words.length; n++) {
-    const testLine = line + words[n] + ' ';
-    const metrics = ctx.measureText(testLine);
-    if (metrics.width > maxWidth && n > 0) {
-      ctx.fillText(line, x, y);
-      line = words[n] + ' ';
-      y += lineHeight;
-    } else {
-      line = testLine;
-    }
-  }
-  ctx.fillText(line, x, y);
-}
-
-// ─── SALA INTERIOR: CONTINGUTS FLOTANTS ────────────────────────────────
+// ─── SALA INTERIOR: CONTINGUTS FLOTANTS VR ────────────────────────────
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
@@ -499,9 +474,10 @@ function clearGroup(g, preserveKey = '') {
 
 function buildRoom(themeIndex) {
   clearGroup(roomGroup);
-
+  
   const theme = themes[themeIndex];
   if (theme) {
+    // Carrega el model 3D específic de la sub-sala (ex: hydraulics.glb)
     loadRoomBackground(getThemeBackgroundAsset(theme));
   }
 
@@ -531,46 +507,32 @@ function buildRoom(themeIndex) {
     lctx.fillText(labels[i], lc.width/2, lc.height/2 + 8);
 
     const ltex = new THREE.CanvasTexture(lc);
-    const lmat = new THREE.MeshBasicMaterial({ map: ltex, transparent: true, side: THREE.DoubleSide });
-    const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), lmat);
+    const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), new THREE.MeshBasicMaterial({ map: ltex, transparent: true, side: THREE.DoubleSide }));
     lmesh.position.set(lx, RL_Y, lz);
     lmesh.lookAt(0, RL_Y, 0);
-    lmat.opacity = 0.4; 
+    lmesh.material.opacity = 0.4;
     roomGroup.add(lmesh);
-
     roomLabels.push({ mesh: lmesh, index: i, prog: 0, text: labels[i] });
   }
 }
 
-// ─── BOTÓ VR ──────────────────────────────────────────────────────────
+// ─── BOTÓ WEBXR SUPORT ──────────────────────────────────────────────────
 const statusEl = document.getElementById('status');
 statusEl.textContent = 'Three.js carregat. Comprovant suport VR...';
 
 if (navigator.xr) {
-  let resolved = false;
-  setTimeout(() => {
-    if (!resolved) {
-      statusEl.textContent = 'La comprovació VR triga massa. Prova de recarregar.';
-      statusEl.style.color = '#fa0';
-    }
-  }, 5000);
-
   navigator.xr.isSessionSupported('immersive-vr').then(supported => {
-    resolved = true;
     if (supported) {
-      statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó.';
-      const btn = VRButton.createButton(renderer, { optionalFeatures: ['local-floor', 'bounded-floor'] });
-      document.body.appendChild(btn);
+      statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó virtual.';
+      document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor', 'bounded-floor'] }));
     } else {
-      statusEl.textContent = 'VR immersiu no suportat. Obre per HTTPS amb el Meta Quest Browser.';
+      statusEl.textContent = 'VR no suportat. Obre aquest enllaç per HTTPS dins el Meta Quest Browser.';
     }
   }).catch(err => {
-    resolved = true;
-    statusEl.textContent = 'Error VR: ' + err.message;
-    statusEl.style.color = '#f66';
+    statusEl.textContent = 'Error WebXR: ' + err.message;
   });
 } else {
-  statusEl.textContent = 'WebXR no disponible. Fes servir el Meta Quest Browser.';
+  statusEl.textContent = 'WebXR absent. Si us plau, utilitza les ulleres Quest 3.';
 }
 
 let state = 'hub';  
@@ -614,7 +576,9 @@ function openLabelWindow(ridx) {
   const cw = 1024, ch = 512;
   const c = document.createElement('canvas'); c.width = cw; c.height = ch;
   const ctx = c.getContext('2d');
-  ctx.clearRect(0,0,cw,ch); ctx.beginPath(); ctx.moveTo(12+24,12); ctx.arcTo(cw-12,12,cw-12,ch-12,24); ctx.arcTo(cw-12,ch-12,12,ch-12,24); ctx.arcTo(12,ch-12,12,12,24); ctx.arcTo(12,12,cw-12,12,24); ctx.closePath(); ctx.fillStyle='rgba(255,255,255,0.98)'; ctx.fill();
+  ctx.clearRect(0,0,cw,ch);
+  ctx.beginPath(); ctx.moveTo(12+24,12); ctx.arcTo(cw-12,12,cw-12,ch-12,24); ctx.arcTo(cw-12,ch-12,12,ch-12,24); ctx.arcTo(12,ch-12,12,12,24); ctx.arcTo(12,12,cw-12,12,24); ctx.closePath();
+  ctx.fillStyle='rgba(255,255,255,0.98)'; ctx.fill();
   ctx.fillStyle = '#111111'; ctx.font = 'bold 64px Arial'; ctx.textAlign='center'; ctx.fillText(info.text, cw/2, ch/2);
   
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, side: THREE.DoubleSide }));
@@ -625,7 +589,7 @@ function openLabelWindow(ridx) {
 function enterRoom(idx) { buildRoom(idx); hubGroup.visible = false; roomGroup.visible = true; state = 'room'; }
 function exitRoom() { clearGroup(roomGroup); roomGroup.visible = false; hubGroup.visible = true; loadRoomBackground('room.glb'); state = 'hub'; }
 
-// ─── CONTROLADORS INPUT ───────────────────────────────────────────────
+// ─── CONTROLADORS INPUTS MANDOS VR ────────────────────────────────────
 const infoEl = document.getElementById('controllerInfo');
 
 function handleInput(frame) {
@@ -652,16 +616,17 @@ function handleInput(frame) {
     if (bPressed && !buttonStates.b) {
       if (guideOverlayVisible) { hideGuideOverlay(); } else if (state === 'room') {
         if (roomWindow) {
-          roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null;
+          roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose());
+          roomGroup.remove(roomWindow); roomWindow = null;
         } else { exitRoom(); }
       }
     }
     buttonStates.a = aPressed; buttonStates.b = bPressed;
   }
-  infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
+  if(infoEl) infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
 
-// ─── LOOP PRINCIPAL D'ANIMACIÓ ─────────────────────────────────────────
+// ─── ANIMACIÓ GLOBAL ───────────────────────────────────────────────────
 const _camPos2D = new THREE.Vector3();
 
 function detectHeadsetResumeFromFrameGap(time, frame) {
@@ -678,7 +643,7 @@ function animate(time, frame) {
     camera.getWorldPosition(_camPos2D);
     const looked = getLookedCube();
     for (let i = 0; i < cubes.length; i++) {
-      const c = cubes[i]; const target = (i === looked) ? 1 : 0; c.prog += (target - c.prog) * 0.12;
+      const c = cubes[i]; const target = (i === looked) ? 1 : 0; r.prog = c.prog + (target - c.prog) * 0.12; c.prog = r.prog;
       c.mesh.scale.setScalar(1 + (HOVER_SCALE - 1) * c.prog);
       const camPos3 = new THREE.Vector3(); camera.getWorldPosition(camPos3); c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
 
@@ -689,11 +654,11 @@ function animate(time, frame) {
     }
   } else if (state === 'room') {
     camera.getWorldPosition(_camPos2D);
-    const looked = getLookedRoomLabel();
+    const looked = roomWindow ? -1 : getLookedRoomLabel();
     for (let i = 0; i < roomLabels.length; i++) {
       const r = roomLabels[i]; const target = (i === looked) ? 1 : 0; r.prog += (target - r.prog) * 0.12;
       r.mesh.scale.setScalar(1 + 0.25 * r.prog);
-      r.mesh.material.opacity = 0.4 + 0.6 * r.prog;
+      r.mesh.material.opacity = roomWindow ? 0.0 : (0.4 + 0.6 * r.prog);
       r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
     }
   }
