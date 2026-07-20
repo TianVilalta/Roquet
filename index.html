@@ -302,7 +302,8 @@ const backgroundGroup = new THREE.Group();
 scene.add(backgroundGroup);
 
 function getThemeBackgroundAsset(theme) {
-  return 'room.glb';
+  if (!theme?.img) return 'room.glb';
+  return theme.img.replace(/\.[^.]+$/, '.glb');
 }
 
 function loadRoomBackground(assetPath = 'room.glb') {
