@@ -3,179 +3,760 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Galeria</title>
+<title>Roquet VR</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   html, body {
+    margin: 0; padding: 0;
     width: 100%; height: 100%;
     overflow: hidden;
-    background: #3b3b3b;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #111;
+    font-family: Arial, sans-serif;
+    color: white;
   }
-
-  /* ── TEXT INFORMATIU SUPERIOR (A DAVANT DE TOT) ── */
-  .top-text {
-    position: fixed;
+  #overlay {
+    position: absolute;
     top: 0; left: 0; right: 0;
-    height: 50px;
+    text-align: center;
+    padding: 20px;
+    pointer-events: none;
+  }
+  #status { margin-top: 10px; font-size: 14px; color: #aaa; }
+  #controllerInfo {
+    position: absolute;
+    top: 10px; left: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+    background: rgba(0,0,0,0.55);
+    padding: 8px 14px;
+    border-radius: 8px;
+    pointer-events: none;
+    white-space: pre;
+  }
+  #hud {
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 260px;
+    background: rgba(0,0,0,0.65);
+    color: white;
+    border-radius: 10px;
+    padding: 6px 8px;
+    text-align: center;
+    pointer-events: none;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    
-    /* CONTROL DE VISIBILITAT CRÍTIC */
-    z-index: 9999 !important; /* Força que es posicioni absolutament a davant de les imatges */
-    color: #ff3b30;           /* Color cridaner temporal perquè el trobis fàcilment */
-    font-size: 16px;          /* Una mica més gran perquè es llegeixi millor */
-    font-weight: bold;
-    
-    background: #1a1a1a;      /* Fons fosc sòlid per contrastar */
-    border-bottom: 2px solid #ff3b30;
   }
-
-  /* ── IMATGE PRINCIPAL ── */
-  #main-preview {
-    position: fixed;
-    top: 50px; /* Comença just a sota del text superior */
-    left: 0; right: 0;
-    bottom: 110px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1; /* Forçat a estar darrere del text */
-  }
-  #main-preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-    transition: opacity 0.35s ease, transform 0.5s cubic-bezier(0.16,1,0.3,1);
-  }
-  #main-preview img.fade {
-    opacity: 0;
-    transform: scale(1.02);
-  }
-
-  /* ── BARRA DE MINIATURES ── */
-  .thumb-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    height: 110px;
-    background: rgba(20,20,20,0.55);
-    backdrop-filter: blur(6px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 16px;
-    z-index: 10;
-  }
-
-  /* miniatures */
-  .thumb-btn {
-    width: 82px;
-    height: 82px;
-    padding: 0;
-    border: 2px solid transparent;
-    background: #2a2a2a;
-    cursor: pointer;
-    overflow: hidden;
-    position: relative;
-    flex-shrink: 0;
-    transition: border-color 0.25s;
-  }
-  .thumb-btn img {
-    width: 100%; height: 100%;
-    object-fit: cover;
-    display: block;
-    filter: brightness(0.55);
-    transition: filter 0.3s, transform 0.3s;
-  }
-  .thumb-btn:hover img { filter: brightness(0.82); transform: scale(1.06); }
-  .thumb-btn.active { border-color: rgba(255,255,255,0.75); }
-  .thumb-btn.active img { filter: brightness(1); }
+  #hud img.logo { height: 28px; margin-bottom: 6px; }
+  #hud .controller { width: 220px; height: 64px; }
+  canvas { display: block; }
 </style>
 </head>
 <body>
-
-<!-- TEXT SUPERIOR -->
-<div class="top-text">
-  TEXT DE PROVA: Si llegeixes això, ara funciona correctament.
+<div id="overlay">
+  <h2>Sales VR — Quest 3</h2>
+  <div id="status">Carregant...</div>
+</div>
+<div id="controllerInfo">Mandos: esperant sessió VR...</div>
+<div id="hud">
+  <img class="logo" src="roquet.png" alt="Roquet">
+  <svg class="controller" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
+    <rect x="10" y="20" width="380" height="80" rx="18" fill="#222" stroke="#444"/>
+    <circle cx="280" cy="60" r="18" fill="#0b0" />
+    <text x="280" y="64" font-size="20" fill="#fff" text-anchor="middle">A</text>
+    <circle cx="320" cy="60" r="18" fill="#b00" />
+    <text x="320" y="64" font-size="20" fill="#fff" text-anchor="middle">B</text>
+    <text x="200" y="40" font-size="14" fill="#ccc" text-anchor="middle">A = Entrar</text>
+    <text x="200" y="62" font-size="14" fill="#ccc" text-anchor="middle">B = Sortir</text>
+    <text x="200" y="92" font-size="12" fill="#888" text-anchor="middle">Meta Quest 3</text>
+  </svg>
 </div>
 
-<!-- IMATGE GRAN -->
-<div id="main-preview">
-  <img id="main-img" src="images/imatge1.png" alt="Imatge principal">
-</div>
-
-<!-- BARRA INFERIOR -->
-<div class="thumb-bar">
-  <button class="thumb-btn active" data-index="0">
-    <img src="images/imatge1.png" alt="1">
-  </button>
-  <button class="thumb-btn" data-index="1">
-    <img src="images/imatge2.png" alt="2">
-  </button>
-  <button class="thumb-btn" data-index="2">
-    <img src="images/imatge3.png" alt="3">
-  </button>
-  <button class="thumb-btn" data-index="3">
-    <img src="images/imatge4.png" alt="4">
-  </button>
-</div>
-
-
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 <script>
-  const images = [
-    { thumb: 'images/imatge1.png', full: 'images/imatge1.png' },
-    { thumb: 'images/imatge2.png', full: 'images/imatge2.png' },
-    { thumb: 'images/imatge3.png', full: 'images/imatge3.png' },
-    { thumb: 'images/imatge4.png', full: 'images/imatge4.png' },
-  ];
+  window.addEventListener('error', e => {
+    const s = document.getElementById('status');
+    if (s) { s.textContent = 'Error: ' + (e.message || e); s.style.color = '#f66'; }
+  });
+  window.addEventListener('unhandledrejection', e => {
+    const s = document.getElementById('status');
+    if (s) { s.textContent = 'Error: ' + (e.reason?.message ?? e.reason); s.style.color = '#f66'; }
+  });
+</script>
 
-  let current = 0;
-  let autoTimer = null;
-  const AUTO_INTERVAL = 5000;
+<script type="module">
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-  const mainImg   = document.getElementById('main-img');
-  const thumbBtns = document.querySelectorAll('.thumb-btn');
+// ─── RENDER ────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+renderer.xr.addEventListener('sessionstart', () => {
+  resetToHubWithGuide();
+  attachHeadsetVisibilityHandler();
+});
+renderer.xr.addEventListener('sessionend', () => {
+  resetToHubWithGuide();
+  detachHeadsetVisibilityHandler();
+});
+document.body.appendChild(renderer.domElement);
 
-  function select(index, resetTimer = true) {
-    const next = (index + images.length) % images.length;
-    if (next === current) return;
-    current = next;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
 
-    thumbBtns.forEach(b => b.classList.remove('active'));
-    thumbBtns[current].classList.add('active');
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
-    mainImg.classList.add('fade');
-    setTimeout(() => {
-      mainImg.src = images[current].full;
-      mainImg.classList.remove('fade');
-    }, 320);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 300);
 
-    if (resetTimer) restartAutoRotate();
+const guideOverlayGroup = new THREE.Group();
+camera.add(guideOverlayGroup);
+guideOverlayGroup.position.set(0, 0, -1.4);
+let guideOverlayVisible = true;
+let headsetVisibilityHandlerAttached = false;
+let lastXRFrameTime = null;
+let pendingHubRecenter = false;
+const HEADSET_OFF_FRAME_GAP_MS = 1000;
+
+function showGuideOverlay() {
+  guideOverlayGroup.visible = true;
+  guideOverlayVisible = true;
+}
+
+function hideGuideOverlay() {
+  guideOverlayGroup.visible = false;
+  guideOverlayVisible = false;
+}
+
+function resetToHubWithGuide() {
+  exitRoom();
+  recenterHubAroundUser();
+  pendingHubRecenter = true;
+  showGuideOverlay();
+}
+
+function markHeadsetOffOrPaused() {
+  resetToHubWithGuide();
+  lastXRFrameTime = null;
+}
+
+function onHeadsetVisibilityChange(event) {
+  const state = event?.session?.visibilityState || renderer.xr.getSession()?.visibilityState;
+  if (state === 'hidden' || state === 'visible' || state === 'visible-blurred') {
+    markHeadsetOffOrPaused();
   }
+}
 
-  function startAutoRotate() {
-    autoTimer = setInterval(() => select(current + 1, false), AUTO_INTERVAL);
+function onDocumentVisibilityChange() {
+  if (document.visibilityState === 'visible' || document.visibilityState === 'hidden') {
+    markHeadsetOffOrPaused();
   }
+}
 
-  function restartAutoRotate() {
-    clearInterval(autoTimer);
-    startAutoRotate();
+function attachHeadsetVisibilityHandler() {
+  const session = renderer.xr.getSession();
+  if (!session || headsetVisibilityHandlerAttached) return;
+  session.addEventListener('visibilitychange', onHeadsetVisibilityChange);
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange);
+  headsetVisibilityHandlerAttached = true;
+}
+
+function detachHeadsetVisibilityHandler() {
+  const session = renderer.xr.getSession();
+  if (session) {
+    session.removeEventListener('visibilitychange', onHeadsetVisibilityChange);
   }
+  document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
+  headsetVisibilityHandlerAttached = false;
+  lastXRFrameTime = null;
+}
 
-  thumbBtns.forEach(btn =>
-    btn.addEventListener('click', () => select(+btn.dataset.index))
+new THREE.TextureLoader().load('roquet.png', (tex) => {
+  const aspect = (tex.image && tex.image.width) ? (tex.image.width / tex.image.height) : 1;
+  const width = 1.2;
+  const height = width / aspect;
+  const guideMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    })
   );
+  guideMesh.position.set(0, 0, 0.01);
+  guideOverlayGroup.add(guideMesh);
+});
+showGuideOverlay();
 
-  document.addEventListener('keydown', e => {
-    if (e.key === 'ArrowLeft')  select(current - 1);
-    if (e.key === 'ArrowRight') select(current + 1);
+// ─── IL·LUMINACIÓ COMPLETA PER A ESCENES PBR ──────────────────────────
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.0));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+dirLight.position.set(5, 12, 6);
+scene.add(dirLight);
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+fillLight.position.set(-5, 6, -6);
+scene.add(fillLight);
+const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambient);
+
+// ─── HUD 3D ────────────────────────────────────────────────────────────
+const hud3D = new THREE.Group();
+camera.add(hud3D);
+hud3D.position.set(0, -0.35, -0.9);
+hud3D.rotation.set(0, 0, 0);
+
+const hudBg = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.36, 0.12),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 })
+);
+hud3D.add(hudBg);
+
+const texLoader = new THREE.TextureLoader();
+texLoader.load('roquet.png', (tex) => {
+  const w = 0.18;
+  const aspect = (tex.image && tex.image.width) ? (tex.image.width / tex.image.height) : 2;
+  const h = w / aspect;
+  const logo = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+  );
+  logo.position.set(-0.09, 0.02, 0.01);
+  hud3D.add(logo);
+});
+
+const ctrlCanvas = document.createElement('canvas');
+ctrlCanvas.width = 600; ctrlCanvas.height = 200;
+const cctx = ctrlCanvas.getContext('2d');
+function drawControllerPreview(ctx) {
+  ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+  ctx.fillStyle = '#222'; ctx.strokeStyle = '#444'; ctx.lineWidth = 6;
+  const rx = 20, ry = 20, rw = ctx.canvas.width-40, rh = ctx.canvas.height-40;
+  ctx.beginPath();
+  ctx.moveTo(20+rx,20);
+  ctx.arcTo(20+rw,20,20+rw,20+rh,ry);
+  ctx.arcTo(20+rw,20+rh,20,20+rh,ry);
+  ctx.arcTo(20,20+rh,20,20,ry);
+  ctx.arcTo(20,20,20+rw,20,ry);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = '#0b8f0b'; ctx.beginPath(); ctx.arc(420, 100, 28, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('A', 420, 100);
+  ctx.fillStyle = '#b00'; ctx.beginPath(); ctx.arc(500, 100, 28, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.fillText('B', 500, 100);
+
+  ctx.fillStyle = '#ccc'; ctx.font = '18px Arial'; ctx.fillText('A = Entrar', 460, 40);
+  ctx.fillText('B = Sortir', 460, 68);
+  ctx.fillStyle = '#888'; ctx.font = '14px Arial'; ctx.fillText('Meta Quest 3', 460, 150);
+}
+drawControllerPreview(cctx);
+const ctrlTex = new THREE.CanvasTexture(ctrlCanvas);
+const ctrlMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.26, 0.10),
+    new THREE.MeshBasicMaterial({ map: ctrlTex, transparent: true })
+  );
+  ctrlMesh.position.set(0, -0.03, 0.01);
+  hud3D.add(ctrlMesh);
+
+// ─── TEMES ────────────────────────────────────────────────────────────
+const themes = [
+  { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png', id: 'pedro',
+    text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo',
+    text2: '08551 Tona , Barcelona , España' },
+  { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png', id: 'hydraulics',
+    text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.',
+    text2: '08551 Tona , Barcelona, España' },
+  { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png', id: 'fundiciones',
+    text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición',
+    text2: '08510, Roda de Ter, Barcelona, España' },
+  { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png', id: 'dinacil',
+    text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
+    text2: '08540 , Centelles, Barcelona, España' },
+  { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png', id: 'eastern',
+    text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos i grandes.',
+    text2: '107025 Aricestii Rahtivani , Prahova , Romania' },
+  { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png', id: 'tekor',
+    text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.',
+    text2: '08500 , Vic, Barcelona, España' },
+];
+
+// ─── FONS REAL EN 3D ───────────────────────────────────────────────────
+const ROOM_TARGET_HEIGHT = 12.0; 
+const backgroundGroup = new THREE.Group();
+scene.add(backgroundGroup);
+
+function getThemeBackgroundAsset(theme) {
+  if (!theme?.img) return 'room.glb';
+  return theme.img.replace(/\.[^.]+$/, '.glb');
+}
+
+function loadRoomBackground(assetPath = 'room.glb') {
+  const glLoader = new GLTFLoader();
+  glLoader.load(
+    assetPath,
+    (gltf) => {
+      const model = gltf.scene;
+      clearGroup(backgroundGroup);
+
+      model.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.castShadow = true;
+          obj.receiveShadow = true;
+          if (obj.material && obj.material.map) {
+            obj.material.map.colorSpace = THREE.SRGBColorSpace;
+          }
+        }
+      });
+
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const height = size.y || 1;
+      const scale = ROOM_TARGET_HEIGHT / height;
+      model.scale.setScalar(scale);
+
+      box.setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.x -= center.x;
+      model.position.z -= center.z;
+      model.position.y -= box.min.y;
+      model.position.y -= 4.5; 
+      model.rotation.y = Math.PI;
+
+      backgroundGroup.add(model);
+      
+      const s = document.getElementById('status');
+      if (s) s.textContent = 'Fons 3D carregat correctament.';
+    },
+    undefined,
+    (error) => {
+      console.error(`No s'ha pogut carregar ${assetPath}`, error);
+    }
+  );
+}
+
+loadRoomBackground('room.glb');
+
+// ─── HUB INICIAL AMB LES PANELES FLOTANTS ────────────────────────────────
+const hubGroup = new THREE.Group();
+scene.add(hubGroup);
+
+function recenterHubAroundUser() {
+  camera.getWorldPosition(_cam);
+  hubGroup.position.set(_cam.x, 0, _cam.z);
+}
+
+const IMAGE_WIDTH = 1.2;
+const IMAGE_HEIGHT = .8;
+const HOVER_SCALE = 1.18;
+const RADIUS = 2.8;
+const IMAGE_Y = 1.0;
+
+const loader = new THREE.TextureLoader();
+const cubes = []; 
+const labelBottomPlanes = [];
+let currentActiveThemeIndex = 0; // Guardem quin tema està actiu a la sala
+
+for (let i = 0; i < themes.length; i++) {
+  const angle = (i / themes.length) * Math.PI * 2;
+  const x = Math.sin(angle) * RADIUS;
+  const z = -Math.cos(angle) * RADIUS;
+  const theme = themes[i];
+
+  const bcanvas = document.createElement('canvas');
+  bcanvas.width = 1024; bcanvas.height = 160;
+  const bc = bcanvas.getContext('2d');
+  bc.clearRect(0,0,bcanvas.width,bcanvas.height);
+  bc.fillStyle = '#111111';
+  bc.font = 'bold 40px Arial';
+  bc.textAlign = 'center';
+  
+  function drawWrappedTextCentered(ctx, text, centerX, maxWidth, lineHeight) {
+    ctx.textBaseline = 'middle';
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+        lines.push(line.trim());
+        line = words[n] + ' ';
+      } else line = testLine;
+    }
+    if (line) lines.push(line.trim());
+    const totalH = lines.length * lineHeight;
+    const canvasH = ctx.canvas ? ctx.canvas.height : 0;
+    let startY = canvasH / 2 - totalH / 2 + lineHeight / 2;
+    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], centerX, startY + i * lineHeight);
+  }
+
+  drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 160, 40);
+  const btex = new THREE.CanvasTexture(bcanvas);
+  const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
+  const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), bmat);
+  bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, z);
+  bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, 0);
+  hubGroup.add(bmesh);
+
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }));
+  mesh.position.set(x, IMAGE_Y, z);
+  mesh.lookAt(0, IMAGE_Y, 0);
+  hubGroup.add(mesh);
+  
+  loader.load(theme.img, (texLoaded) => {
+    mesh.material.map = texLoaded;
+    mesh.material.needsUpdate = true;
+    const iw = texLoaded.image?.naturalWidth || texLoaded.image?.width || 1024;
+    const ih = texLoaded.image?.naturalHeight || texLoaded.image?.height || 1024;
+    const w = IMAGE_WIDTH * 0.5; 
+    const h = w * (ih / iw);
+    mesh.geometry.dispose();
+    mesh.geometry = new THREE.PlaneGeometry(w, h);
+    mesh.position.set(x, IMAGE_Y, z);
+    mesh.lookAt(0, IMAGE_Y, 0);
+    
+    const labelHeight = 0.36;
+    bmesh.geometry.dispose();
+    bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), labelHeight);
+    const imgBottomY = IMAGE_Y - h / 2;
+    const gap = 0.08;
+    const bY = imgBottomY - gap - labelHeight / 2;
+    const imgPos = mesh.position.clone();
+    bmesh.position.set(imgPos.x, bY, imgPos.z);
+    bmesh.lookAt(0, bY, 0);
   });
 
-  startAutoRotate();
+  cubes.push({ mesh, index: i, prog: 0 });
+  labelBottomPlanes.push(bmesh);
+}
+
+// Generació de la vista previa difuminada (Canvas 2D perspective + text corporatiu real)
+function makeRoomPreviewTexture(theme) {
+  const S = 512;
+  const off = document.createElement('canvas');
+  off.width = S; off.height = S;
+  const oc = off.getContext('2d');
+  const themeColor = '#' + new THREE.Color(theme.color).getHexString();
+
+  oc.fillStyle = '#aaaaaa';
+  oc.fillRect(0, 0, S, S);
+
+  const cx = S * 0.5, cy = S * 0.48;
+  const margin = S * 0.22;
+
+  oc.fillStyle = '#999999';
+  oc.beginPath(); oc.moveTo(0, 0); oc.lineTo(cx, cy); oc.lineTo(cx, S); oc.lineTo(0, S); oc.closePath(); oc.fill();
+
+  oc.fillStyle = '#777777';
+  oc.beginPath(); oc.moveTo(S, 0); oc.lineTo(cx, cy); oc.lineTo(cx, S); oc.lineTo(S, S); oc.closePath(); oc.fill();
+
+  oc.fillStyle = '#111111';
+  oc.beginPath(); oc.moveTo(0, S); oc.lineTo(cx, S * 0.72); oc.lineTo(S, S); oc.closePath(); oc.fill();
+
+  oc.fillStyle = '#333333';
+  oc.beginPath(); oc.moveTo(0, 0); oc.lineTo(cx, S * 0.22); oc.lineTo(S, 0); oc.closePath(); oc.fill();
+
+  oc.strokeStyle = themeColor; oc.lineWidth = 10; oc.globalAlpha = 0.9;
+  oc.strokeRect(margin, margin, S - margin * 2, S - margin * 2); oc.globalAlpha = 1;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = S; canvas.height = S;
+  const ctx = canvas.getContext('2d');
+  ctx.filter = 'blur(6px)';
+  ctx.drawImage(off, 0, 0);
+
+  ctx.filter = 'none';
+  ctx.globalAlpha = 0.15; ctx.fillStyle = themeColor; ctx.fillRect(0, 0, S, S); ctx.globalAlpha = 1;
+
+  // Afegim a sobre el text explicatiu i descriptiu de la ubicació corresponent
+  ctx.fillStyle = '#111111';
+  ctx.font = 'bold 24px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(theme.label.toUpperCase(), S/2, 60);
+
+  ctx.font = '20px Arial';
+  function wrapText(context, text, x, y, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    let line = '';
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      if (context.measureText(testLine).width > maxWidth && n > 0) {
+        context.fillText(line, x, y);
+        line = words[n] + ' ';
+        y += lineHeight;
+      } else { line = testLine; }
+    }
+    context.fillText(line, x, y);
+  }
+  wrapText(ctx, theme.text, S/2, 140, S - 80, 28);
+
+  return canvas;
+}
+
+// ─── SALA INTERIOR: CONTINGUTS FLOTANTS VR ────────────────────────────
+const roomGroup = new THREE.Group();
+roomGroup.visible = false;
+scene.add(roomGroup);
+
+function clearGroup(g, preserveKey = '') {
+  while (g.children.length) {
+    const c = g.children[0];
+    g.remove(c);
+    if (preserveKey && c.userData?.[preserveKey]) continue;
+    c.geometry?.dispose();
+    if (c.material) {
+      (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose());
+    }
+  }
+}
+
+function buildRoom(themeIndex) {
+  clearGroup(roomGroup);
+  currentActiveThemeIndex = themeIndex;
+  
+  const theme = themes[themeIndex];
+  if (theme) {
+    loadRoomBackground(getThemeBackgroundAsset(theme));
+  }
+
+  roomLabels.length = 0;
+  const labels = ['Historia', 'Productes', 'Grup'];
+  const RL_RADIUS = 2.4;
+  const RL_Y = 1.2;
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  dir.y = 0;
+  if (dir.lengthSq() === 0) dir.set(0, 0, -1);
+  dir.normalize();
+  const baseAngle = Math.atan2(dir.x, -dir.z);
+  const labelAngles = [baseAngle, baseAngle + (2 * Math.PI / 3), baseAngle - (2 * Math.PI / 3)];
+  
+  for (let i = 0; i < labels.length; i++) {
+    const ang = labelAngles[i];
+    const lx = Math.sin(ang) * RL_RADIUS;
+    const lz = -Math.cos(ang) * RL_RADIUS;
+
+    const lc = document.createElement('canvas'); lc.width = 512; lc.height = 120;
+    const lctx = lc.getContext('2d');
+    lctx.clearRect(0,0,lc.width,lc.height);
+    lctx.beginPath(); lctx.moveTo(6+18,6); lctx.arcTo(512-6,6,512-6,120-6,18); lctx.arcTo(512-6,120-6,6,120-6,18); lctx.arcTo(6,120-6,6,6,18); lctx.arcTo(6,6,512-6,6,18); lctx.closePath();
+    lctx.fillStyle = 'rgba(255,255,255,0.98)'; lctx.fill();
+    lctx.fillStyle = '#111111'; lctx.font = 'bold 56px Arial'; lctx.textAlign = 'center';
+    lctx.fillText(labels[i], lc.width/2, lc.height/2 + 8);
+
+    const ltex = new THREE.CanvasTexture(lc);
+    const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), new THREE.MeshBasicMaterial({ map: ltex, transparent: true, side: THREE.DoubleSide }));
+    lmesh.position.set(lx, RL_Y, lz);
+    lmesh.lookAt(0, RL_Y, 0);
+    lmesh.material.opacity = 0.4;
+    roomGroup.add(lmesh);
+    roomLabels.push({ mesh: lmesh, index: i, prog: 0, text: labels[i] });
+  }
+}
+
+// ─── LÒGICA DE LES FINESTRES SEGONS UBICACIÓ (SOLUCIÓ DE LA PETICIÓ) ───
+function openLabelWindow(ridx) {
+  if (roomWindow) { 
+    roomGroup.remove(roomWindow); 
+    roomWindow.geometry?.dispose(); 
+    (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); 
+    roomWindow = null; 
+  }
+  
+  const info = roomLabels[ridx];
+  const p = info.mesh.position.clone();
+  const theme = themes[currentActiveThemeIndex];
+
+  let mesh;
+
+  // CONDICIÓ: Si estem a hydraulics, es genera el teu text centrat personalitzat
+  if (theme && theme.id === 'hydraulics') {
+    const cw = 1024, ch = 512;
+    const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0,0,cw,ch);
+    ctx.beginPath(); ctx.moveTo(12+24,12); ctx.arcTo(cw-12,12,cw-12,ch-12,24); ctx.arcTo(cw-12,ch-12,12,ch-12,24); ctx.arcTo(12,ch-12,12,12,24); ctx.arcTo(12,12,cw-12,12,24); ctx.closePath();
+    ctx.fillStyle='rgba(255,255,255,0.98)'; ctx.fill();
+    ctx.fillStyle = '#111111'; ctx.font = 'bold 64px Arial'; ctx.textAlign='center'; 
+    ctx.fillText(info.text, cw/2, ch/2);
+    
+    const tex = new THREE.CanvasTexture(c);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+    mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), mat);
+  } else {
+    // EN QUALSEVOL ALTRA SALA: Genera la finestra amb perspectiva i fons blur difuminat del principi
+    const blurredCanvas = makeRoomPreviewTexture(theme);
+    const tex = new THREE.CanvasTexture(blurredCanvas);
+    // Fem servir MeshStandardMaterial amb doble cara reactiva a la il·luminació global
+    const mat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.4 });
+    mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), mat);
+  }
+  
+  camera.getWorldPosition(_cam); 
+  const dir = _cam.clone().sub(p).normalize(); 
+  const frontPos = p.clone().add(dir.multiplyScalar(0.6));
+  
+  mesh.position.copy(frontPos); 
+  mesh.lookAt(_cam.x, frontPos.y, _cam.z); 
+  roomGroup.add(mesh); 
+  roomWindow = mesh;
+}
+
+// ─── BOTÓ WEBXR SUPORT ──────────────────────────────────────────────────
+const statusEl = document.getElementById('status');
+statusEl.textContent = 'Three.js carregat. Comprovant suport VR...';
+
+if (navigator.xr) {
+  navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+    if (supported) {
+      statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó virtual.';
+      document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor', 'bounded-floor'] }));
+    } else {
+      statusEl.textContent = 'VR no suportat. Obre aquest enllaç per HTTPS dins el Meta Quest Browser.';
+    }
+  }).catch(err => {
+    statusEl.textContent = 'Error WebXR: ' + err.message;
+  });
+} else {
+  statusEl.textContent = 'WebXR absent. Si us plau, utilitza les ulleres Quest 3.';
+}
+
+let state = 'hub';  
+const buttonStates = {};
+let roomWindow = null;  
+
+const _fwd = new THREE.Vector3();
+const _cam = new THREE.Vector3();
+const _to  = new THREE.Vector3();
+
+function getLookedCube() {
+  camera.getWorldDirection(_fwd);
+  camera.getWorldPosition(_cam);
+  let best = -1, bestDot = 0.72;
+  for (let i = 0; i < cubes.length; i++) {
+    _to.copy(cubes[i].mesh.position).sub(_cam).normalize();
+    const d = _fwd.dot(_to);
+    if (d > bestDot) { bestDot = d; best = i; }
+  }
+  return best;
+}
+
+function getLookedRoomLabel() {
+  camera.getWorldDirection(_fwd);
+  camera.getWorldPosition(_cam);
+  let best = -1, bestDot = 0.7;
+  for (let i = 0; i < roomLabels.length; i++) {
+    _to.copy(roomLabels[i].mesh.position).sub(_cam).normalize();
+    const d = _fwd.dot(_to);
+    if (d > bestDot) { bestDot = d; best = i; }
+  }
+  return best;
+}
+
+function enterRoom(idx) { buildRoom(idx); hubGroup.visible = false; roomGroup.visible = true; state = 'room'; }
+function exitRoom() { clearGroup(roomGroup); roomGroup.visible = false; hubGroup.visible = true; loadRoomBackground('room.glb'); state = 'hub'; }
+
+// ─── CONTROLADORS INPUTS MANDOS VR ────────────────────────────────────
+const infoEl = document.getElementById('controllerInfo');
+
+function handleInput(frame) {
+  const session = renderer.xr.getSession(); if (!session) return;
+  const refSpace = renderer.xr.getReferenceSpace(); let infoText = 'Posició dels mandos:\n'; let anyController = false;
+
+  for (const src of session.inputSources) {
+    if (!src.gamepad) continue;
+    if (frame && refSpace) {
+      const space = src.gripSpace || src.targetRaySpace;
+      if (space) {
+        const pose = frame.getPose(space, refSpace);
+        if (pose) { anyController = true; const p = pose.transform.position; const hand = src.handedness === 'right' ? 'Dret    ' : 'Esquerre'; infoText += `${hand}: x=${p.x.toFixed(2)}  y=${p.y.toFixed(2)}  z=${p.z.toFixed(2)}\n`; }
+      }
+    }
+    if (src.handedness !== 'right') continue;
+    const gp = src.gamepad; const aPressed = gp.buttons[4]?.pressed; const bPressed = gp.buttons[5]?.pressed;
+
+    if (aPressed && !buttonStates.a) {
+      if (guideOverlayVisible) { hideGuideOverlay(); } else if (state === 'hub') { const idx = getLookedCube(); if (idx !== -1) enterRoom(idx); } else if (state === 'room') {
+        const ridx = getLookedRoomLabel(); if (ridx !== -1) openLabelWindow(ridx);
+      }
+    }
+    if (bPressed && !buttonStates.b) {
+      if (guideOverlayVisible) { hideGuideOverlay(); } else if (state === 'room') {
+        if (roomWindow) {
+          roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null;
+        } else { exitRoom(); }
+      }
+    }
+    buttonStates.a = aPressed; buttonStates.b = bPressed;
+  }
+  if(infoEl) infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
+}
+
+// ─── ANIMACIÓ GLOBAL ───────────────────────────────────────────────────
+const _camPos2D = new THREE.Vector3();
+
+function detectHeadsetResumeFromFrameGap(time, frame) {
+  if (!renderer.xr.getSession() || !frame) { lastXRFrameTime = null; return; }
+  if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToHubWithGuide(); }
+  lastXRFrameTime = time;
+}
+
+function animate(time, frame) {
+  detectHeadsetResumeFromFrameGap(time, frame);
+  if (pendingHubRecenter && renderer.xr.getSession() && frame) { recenterHubAroundUser(); pendingHubRecenter = false; }
+
+  if (state === 'hub') {
+    camera.getWorldPosition(_camPos2D);
+    const looked = getLookedCube();
+    for (let i = 0; i < cubes.length; i++) {
+      const c = cubes[i]; const target = (i === looked) ? 1 : 0; c.prog += (target - c.prog) * 0.12;
+      c.mesh.scale.setScalar(1 + (HOVER_SCALE - 1) * c.prog);
+      const camPos3 = new THREE.Vector3(); camera.getWorldPosition(camPos3); c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
+
+      const bp = labelBottomPlanes[i]; const imgPos = c.mesh.position.clone();
+      bp.position.x = imgPos.x; bp.position.z = imgPos.z;
+      bp.material.opacity = 0.25 + 0.75 * c.prog;
+      bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z); bp.rotateX(-0.12);
+    }
+  } else if (state === 'room') {
+    camera.getWorldPosition(_camPos2D);
+    const looked = roomWindow ? -1 : getLookedRoomLabel();
+    for (let i = 0; i < roomLabels.length; i++) {
+      const r = roomLabels[i]; const target = (i === looked) ? 1 : 0; r.prog += (target - r.prog) * 0.12;
+      r.mesh.scale.setScalar(1 + 0.25 * r.prog);
+      r.mesh.material.opacity = roomWindow ? 0.0 : (0.4 + 0.6 * r.prog);
+      r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
+    }
+  }
+
+  handleInput(frame);
+  renderer.render(scene, camera);
+}
+
+renderer.setAnimationLoop((time, frame) => { animate(time, frame); });
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
 </script>
 </body>
 </html>
