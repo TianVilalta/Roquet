@@ -98,17 +98,6 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// ─── VARIABLES GLOBALS DECLARADES CORRECTAMENT ─────────────────────────
-let state = 'hub';  
-const buttonStates = { a: false, b: false };
-let roomWindow = null;  
-const roomLabels = []; // Arreglat: Declaració global de la llista de textos/etiquetes
-
-const _fwd = new THREE.Vector3();
-const _cam = new THREE.Vector3();
-const _to  = new THREE.Vector3();
-const _camPos2D = new THREE.Vector3();
-
 // ─── RENDER ────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
@@ -168,8 +157,8 @@ function markHeadsetOffOrPaused() {
 }
 
 function onHeadsetVisibilityChange(event) {
-  const stateVal = event?.session?.visibilityState || renderer.xr.getSession()?.visibilityState;
-  if (stateVal === 'hidden' || stateVal === 'visible' || stateVal === 'visible-blurred') {
+  const state = event?.session?.visibilityState || renderer.xr.getSession()?.visibilityState;
+  if (state === 'hidden' || state === 'visible' || state === 'visible-blurred') {
     markHeadsetOffOrPaused();
   }
 }
@@ -216,7 +205,7 @@ new THREE.TextureLoader().load('roquet.png', (tex) => {
 });
 showGuideOverlay();
 
-// ─── IL·LUMINACIÓ ──────────────────────────────────────────────────────
+// ─── IL·LUMINACIÓ COMPLETA PER A ESCENES PBR ──────────────────────────
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.0));
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
 dirLight.position.set(5, 12, 6);
@@ -231,6 +220,7 @@ scene.add(ambient);
 const hud3D = new THREE.Group();
 camera.add(hud3D);
 hud3D.position.set(0, -0.35, -0.9);
+hud3D.rotation.set(0, 0, 0);
 
 const hudBg = new THREE.Mesh(
   new THREE.PlaneGeometry(0.36, 0.12),
@@ -363,7 +353,7 @@ function loadRoomBackground(assetPath = 'room.glb') {
 
 loadRoomBackground('room.glb');
 
-// ─── HUB INICIAL AMB ELS PANELLS FLOTANTS ──────────────────────────────
+// ─── HUB INICIAL AMB LES PANELES FLOTANTS ────────────────────────────────
 const hubGroup = new THREE.Group();
 scene.add(hubGroup);
 
@@ -381,7 +371,7 @@ const IMAGE_Y = 1.0;
 const loader = new THREE.TextureLoader();
 const cubes = []; 
 const labelBottomPlanes = [];
-let currentActiveThemeIndex = 0;
+let currentActiveThemeIndex = 0; // Guardem quin tema està actiu a la sala
 
 for (let i = 0; i < themes.length; i++) {
   const angle = (i / themes.length) * Math.PI * 2;
@@ -456,6 +446,7 @@ for (let i = 0; i < themes.length; i++) {
   labelBottomPlanes.push(bmesh);
 }
 
+// Generació de la vista previa difuminada (Canvas 2D perspective + text corporatiu real)
 function makeRoomPreviewTexture(theme) {
   const S = 512;
   const off = document.createElement('canvas');
@@ -493,6 +484,7 @@ function makeRoomPreviewTexture(theme) {
   ctx.filter = 'none';
   ctx.globalAlpha = 0.15; ctx.fillStyle = themeColor; ctx.fillRect(0, 0, S, S); ctx.globalAlpha = 1;
 
+  // Afegim a sobre el text explicatiu i descriptiu de la ubicació corresponent
   ctx.fillStyle = '#111111';
   ctx.font = 'bold 24px Arial';
   ctx.textAlign = 'center';
@@ -518,29 +510,21 @@ function makeRoomPreviewTexture(theme) {
   return canvas;
 }
 
-// ─── SALA INTERIOR ─────────────────────────────────────────────────────
+// ─── SALA INTERIOR: CONTINGUTS FLOTANTS VR ────────────────────────────
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
 
-// ARREGLAT: Funció clearGroup sense bucles infinits ni pèrdues de memòria
 function clearGroup(g, preserveKey = '') {
-  const toRemove = [];
-  for (let i = 0; i < g.children.length; i++) {
-    const c = g.children[i];
-    if (preserveKey && c.userData?.[preserveKey]) {
-      continue;
-    }
-    toRemove.push(c);
-  }
-
-  toRemove.forEach(c => {
+  while (g.children.length) {
+    const c = g.children[0];
     g.remove(c);
+    if (preserveKey && c.userData?.[preserveKey]) continue;
     c.geometry?.dispose();
     if (c.material) {
       (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose());
     }
-  });
+  }
 }
 
 function buildRoom(themeIndex) {
@@ -587,6 +571,7 @@ function buildRoom(themeIndex) {
   }
 }
 
+// ─── LÒGICA DE LES FINESTRES SEGONS UBICACIÓ (SOLUCIÓ DE LA PETICIÓ) ───
 function openLabelWindow(ridx) {
   if (roomWindow) { 
     roomGroup.remove(roomWindow); 
@@ -601,6 +586,7 @@ function openLabelWindow(ridx) {
 
   let mesh;
 
+  // CONDICIÓ: Si estem a hydraulics, es genera el teu text centrat personalitzat
   if (theme && theme.id === 'hydraulics') {
     const cw = 1024, ch = 512;
     const c = document.createElement('canvas'); c.width = cw; c.height = ch;
@@ -615,8 +601,10 @@ function openLabelWindow(ridx) {
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
     mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), mat);
   } else {
+    // EN QUALSEVOL ALTRA SALA: Genera la finestra amb perspectiva i fons blur difuminat del principi
     const blurredCanvas = makeRoomPreviewTexture(theme);
     const tex = new THREE.CanvasTexture(blurredCanvas);
+    // Fem servir MeshStandardMaterial amb doble cara reactiva a la il·luminació global
     const mat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.4 });
     mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), mat);
   }
@@ -631,7 +619,7 @@ function openLabelWindow(ridx) {
   roomWindow = mesh;
 }
 
-// ─── WEBXR BUTTON ──────────────────────────────────────────────────────
+// ─── BOTÓ WEBXR SUPORT ──────────────────────────────────────────────────
 const statusEl = document.getElementById('status');
 statusEl.textContent = 'Three.js carregat. Comprovant suport VR...';
 
@@ -649,6 +637,14 @@ if (navigator.xr) {
 } else {
   statusEl.textContent = 'WebXR absent. Si us plau, utilitza les ulleres Quest 3.';
 }
+
+let state = 'hub';  
+const buttonStates = {};
+let roomWindow = null;  
+
+const _fwd = new THREE.Vector3();
+const _cam = new THREE.Vector3();
+const _to  = new THREE.Vector3();
 
 function getLookedCube() {
   camera.getWorldDirection(_fwd);
@@ -677,7 +673,7 @@ function getLookedRoomLabel() {
 function enterRoom(idx) { buildRoom(idx); hubGroup.visible = false; roomGroup.visible = true; state = 'room'; }
 function exitRoom() { clearGroup(roomGroup); roomGroup.visible = false; hubGroup.visible = true; loadRoomBackground('room.glb'); state = 'hub'; }
 
-// ─── CONTROLADORS ──────────────────────────────────────────────────────
+// ─── CONTROLADORS INPUTS MANDOS VR ────────────────────────────────────
 const infoEl = document.getElementById('controllerInfo');
 
 function handleInput(frame) {
@@ -713,7 +709,9 @@ function handleInput(frame) {
   if(infoEl) infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
 
-// ─── ANIMACIÓ ──────────────────────────────────────────────────────────
+// ─── ANIMACIÓ GLOBAL ───────────────────────────────────────────────────
+const _camPos2D = new THREE.Vector3();
+
 function detectHeadsetResumeFromFrameGap(time, frame) {
   if (!renderer.xr.getSession() || !frame) { lastXRFrameTime = null; return; }
   if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToHubWithGuide(); }
