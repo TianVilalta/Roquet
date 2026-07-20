@@ -1,14 +1,108 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roquet VR</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, sans-serif;
+    color: white;
+  }
+  #overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    text-align: center;
+    padding: 20px;
+    pointer-events: none;
+  }
+  #status { margin-top: 10px; font-size: 14px; color: #aaa; }
+  #controllerInfo {
+    position: absolute;
+    top: 10px; left: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+    background: rgba(0,0,0,0.55);
+    padding: 8px 14px;
+    border-radius: 8px;
+    pointer-events: none;
+    white-space: pre;
+  }
+  #hud {
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 260px;
+    background: rgba(0,0,0,0.65);
+    color: white;
+    border-radius: 10px;
+    padding: 6px 8px;
+    text-align: center;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  #hud img.logo { height: 28px; margin-bottom: 6px; }
+  #hud .controller { width: 220px; height: 64px; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="overlay">
+  <h2>Sales VR — Quest 3</h2>
+  <div id="status">Carregant...</div>
+</div>
+<div id="controllerInfo">Mandos: esperant sessió VR...</div>
+<div id="hud">
+  <img class="logo" src="roquet.png" alt="Roquet">
+  <svg class="controller" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
+    <rect x="10" y="20" width="380" height="80" rx="18" fill="#222" stroke="#444"/>
+    <circle cx="280" cy="60" r="18" fill="#0b0" />
+    <text x="280" y="64" font-size="20" fill="#fff" text-anchor="middle">A</text>
+    <circle cx="320" cy="60" r="18" fill="#b00" />
+    <text x="320" y="64" font-size="20" fill="#fff" text-anchor="middle">B</text>
+    <text x="200" y="40" font-size="14" fill="#ccc" text-anchor="middle">A = Entrar</text>
+    <text x="200" y="62" font-size="14" fill="#ccc" text-anchor="middle">B = Sortir</text>
+    <text x="200" y="92" font-size="12" fill="#888" text-anchor="middle">Meta Quest 3</text>
+  </svg>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script>
+  window.addEventListener('error', e => {
+    const s = document.getElementById('status');
+    if (s) { s.textContent = 'Error: ' + (e.message || e); s.style.color = '#f66'; }
+  });
+  window.addEventListener('unhandledrejection', e => {
+    const s = document.getElementById('status');
+    if (s) { s.textContent = 'Error: ' + (e.reason?.message ?? e.reason); s.style.color = '#f66'; }
+  });
+</script>
+
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// ─── VARIABLES GLOBALS I ARRAYS DE SUPORT ──────────────────────────────
+// ─── VARIABLES GLOBALS I CONTROL DE CODI ──────────────────────────────
 let state = 'hub';  
 const buttonStates = {};
 let roomWindow = null;  
-const roomLabels = []; // <── SOLUCIÓ: Declarat correctament per evitar el crash
+const roomLabels = []; // <── CORREGIT: Ja no és indefinida, s'evita el crash de la app
 
 const _fwd = new THREE.Vector3();
 const _cam = new THREE.Vector3();
@@ -25,16 +119,16 @@ renderer.toneMappingExposure = 1.2;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 
-// CÀMERA (Afegida a la escena correctament)
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 300);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111);
-scene.add(camera); // Essencial per a que els fills de la càmera es renderitzin bé
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 300);
+scene.add(camera); // S'afegeix a l'escena per coherència de transformacions dels fills 3D
 
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
-// GUIA INICIAL (Guia fixa respecte a la càmera)
+// GUIA INICIAL (Interfície sobreposada a la visió)
 const guideOverlayGroup = new THREE.Group();
 camera.add(guideOverlayGroup);
 guideOverlayGroup.position.set(0, 0, -1.4);
@@ -186,11 +280,11 @@ function drawControllerPreview(ctx) {
 drawControllerPreview(cctx);
 const ctrlTex = new THREE.CanvasTexture(ctrlCanvas);
 const ctrlMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.26, 0.10),
-    new THREE.MeshBasicMaterial({ map: ctrlTex, transparent: true })
-  );
-  ctrlMesh.position.set(0, -0.03, 0.01);
-  hud3D.add(ctrlMesh);
+  new THREE.PlaneGeometry(0.26, 0.10),
+  new THREE.MeshBasicMaterial({ map: ctrlTex, transparent: true })
+);
+ctrlMesh.position.set(0, -0.03, 0.01);
+hud3D.add(ctrlMesh);
 
 // ─── TEMES ────────────────────────────────────────────────────────────
 const themes = [
@@ -271,7 +365,7 @@ function loadRoomBackground(assetPath = 'room.glb') {
 
 loadRoomBackground('room.glb');
 
-// ─── HUB INICIAL AMB LES PANELES FLOTANTS ────────────────────────────────
+// ─── HUB INICIAL AMB ELS PANELLS FLOTANTS ────────────────────────────────
 const hubGroup = new THREE.Group();
 scene.add(hubGroup);
 
@@ -449,7 +543,7 @@ function buildRoom(themeIndex) {
     loadRoomBackground(getThemeBackgroundAsset(theme));
   }
 
-  roomLabels.length = 0; // Ara buida correctament l'array global
+  roomLabels.length = 0; 
   const labels = ['Historia', 'Productes', 'Grup'];
   const RL_RADIUS = 2.4;
   const RL_Y = 1.2;
@@ -659,3 +753,5 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
+</body>
+</html>
