@@ -2,84 +2,121 @@
 <html lang="ca">
 <head>
   <meta charset="UTF-8">
-  <title>Experiència WebXR - Meta Quest 3</title>
-  <!-- Incloem A-Frame i el component d'entorn virtual -->
+  <title>WebXR Meta Quest 3 - Gaze Navigation</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <!-- Script personalitzat per a la lògica de la lògica de les sales i interaccions -->
   <script>
-    // Lògica global del "Director de sales"
+    // Lògica de control de sales i botons dels comandaments
     AFRAME.registerComponent('room-manager', {
       init: function () {
         this.currentRoom = 'principal';
-        this.focusedElement = null;
+        this.closestElement = null;
         
-        // Escoltadors per als botons del comandament dret
-        this.el.addEventListener('abuttondown', this.onAButton.bind(this));
-        this.el.addEventListener('bbuttondown', this.onBButton.bind(this));
+        // Escoltadors globals per als botons de les Meta Quest (Mando dret i esquerre)
+        window.addEventListener('abuttondown', this.onAButton.bind(this));
+        window.addEventListener('bbuttondown', this.onBButton.bind(this));
+        window.addEventListener('xbuttondown', this.onBButton.bind(this)); // Per si usen el mando esquerre
+        window.addEventListener('ybuttondown', this.onBButton.bind(this));
         
-        // Guardar referència de les sales
         this.salaPrincipal = document.querySelector('#sala-principal');
         this.salaR3 = document.querySelector('#sala-r3');
         this.subSales = document.querySelector('#sub-sales');
         this.panellsText = document.querySelector('#panells-text');
       },
 
-      setFocused: function(el) {
-        this.focusedElement = el;
+      tick: function() {
+        // Cada fotograma busquem quin element té l'usuari més a prop del centre de la mirada
+        this.updateClosestElement();
       },
 
-      clearFocused: function() {
-        this.focusedElement = null;
+      updateClosestElement: function() {
+        // Busquem només els elements que formen part de la sala que està visible actualment
+        let selector = '';
+        if (this.currentRoom === 'principal') selector = '#sala-principal .target-look';
+        else if (this.currentRoom === 'r3') selector = '#sala-r3 .target-look';
+        else if (this.currentRoom.startsWith('sub-')) selector = '#sub-sales .target-look';
+
+        const elements = document.querySelectorAll(selector);
+        if (!elements.length) {
+          this.closestElement = null;
+          return;
+        }
+
+        const cameraEl = document.querySelector('#camera');
+        const cameraMatrix = cameraEl.object3D.matrixWorld;
+        
+        // Vector cap a on mira la càmera (direcció cap endavant en tres dimensions)
+        const cameraDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(cameraMatrix).normalize();
+        const cameraPosition = new THREE.Vector3().setFromMatrixPosition(cameraMatrix);
+
+        let maxDot = -1;
+        let bestEl = null;
+
+        elements.forEach(el => {
+          const elPosition = new THREE.Vector3().setFromMatrixPosition(el.object3D.matrixWorld);
+          const toElement = elPosition.sub(cameraPosition).normalize();
+          
+          // El Producte Escalar (Dot Product) ens diu com de prop està l'objecte del centre de la visió (1.0 és perfecte)
+          const dot = cameraDirection.dot(toElement);
+
+          if (dot > maxDot) {
+            maxDot = dot;
+            bestEl = el;
+          }
+        });
+
+        // Si l'element més proper ha canviat, actualitzem les mides (l'efecte de fer-se gran)
+        if (bestEl !== this.closestElement) {
+          if (this.closestElement) {
+            this.closestElement.setAttribute('animation__scale', 'property: scale; to: 1 1 1; dur: 150; easing: easeOutQuad');
+          }
+          this.closestElement = bestEl;
+          if (this.closestElement) {
+            this.closestElement.setAttribute('animation__scale', 'property: scale; to: 1.25 1.25 1.25; dur: 150; easing: easeOutQuad');
+          }
+        }
       },
 
       onAButton: function () {
-        if (!this.focusedElement) return;
+        if (!this.closestElement) return;
 
-        const target = this.focusedElement.getAttribute('data-target');
-        const action = this.focusedElement.getAttribute('data-action');
+        const target = this.closestElement.getAttribute('data-target');
+        const action = this.closestElement.getAttribute('data-action');
 
-        // Canvis de sala principal
         if (target) {
           this.transitionToRoom(target);
-        } 
-        // Accions de text (Que fem / Com ho fem)
-        else if (action) {
+        } else if (action) {
           this.openTextPanel(action);
         }
       },
 
       onBButton: function () {
-        // Si hi ha un panell de text oest obert, el tanquem i ens quedem a la sub-sala
         if (this.panellsText.getAttribute('visible')) {
           this.panellsText.setAttribute('visible', false);
-          // Amaguem tots els continguts dels panells
           document.querySelectorAll('.contingut-panell').forEach(p => p.setAttribute('visible', false));
           return;
         }
 
-        // Enrere des d'una sub-sala de R3 cap a la sala R3
         if (this.currentRoom.startsWith('sub-')) {
           this.transitionToRoom('r3');
-        } 
-        // Enrere des de qualsevol sala de primer nivell cap a la Principal
-        else if (this.currentRoom !== 'principal') {
+        } else if (this.currentRoom !== 'principal') {
           this.transitionToRoom('principal');
         }
       },
 
       transitionToRoom: function(roomName) {
+        // Reset de l'escala de l'element que deixem enrere
+        if (this.closestElement) {
+          this.closestElement.setAttribute('scale', '1 1 1');
+        }
+
         this.currentRoom = roomName;
         
-        // Ocultar tot primer
         this.salaPrincipal.setAttribute('visible', false);
         this.salaR3.setAttribute('visible', false);
         this.subSales.setAttribute('visible', false);
         this.panellsText.setAttribute('visible', false);
-        
-        // Amagar sub-sales específiques
         document.querySelectorAll('.sub-sala-contingut').forEach(s => s.setAttribute('visible', false));
 
-        // Mostrar la sala corresponent
         if (roomName === 'principal') {
           this.salaPrincipal.setAttribute('visible', true);
         } else if (roomName === 'r3') {
@@ -90,72 +127,35 @@
           if (subSalaEspecifica) subSalaEspecifica.setAttribute('visible', true);
         }
         
-        this.clearFocused();
+        this.closestElement = null;
       },
 
       openTextPanel: function(actionType) {
-        // actionType serà "quefem-nomSala" o "comhofem-nomSala"
         this.panellsText.setAttribute('visible', true);
-        
-        // Amaguem finestres anteriors
         document.querySelectorAll('.contingut-panell').forEach(p => p.setAttribute('visible', false));
         
-        // Mostrem la finestra específica de la sala actual i el text seleccionat
-        const panellId = `#panell-${actionType}`;
-        const panell = document.querySelector(panellId);
-        if (panell) {
-          panell.setAttribute('visible', true);
-        }
-      }
-    });
-
-    // Component per a l'efecte "Hover" (mirar la imatge)
-    AFRAME.registerComponent('hover-scale', {
-      init: function () {
-        const el = this.el;
-        const manager = document.querySelector('a-scene').components['room-manager'];
-
-        el.addEventListener('mouseenter', function () {
-          el.setAttribute('animation__scale', {
-            property: 'scale',
-            to: '1.2 1.2 1.2',
-            dur: 200,
-            easing: 'easeOutCubic'
-          });
-          if (manager) manager.setFocused(el);
-        });
-
-        el.addEventListener('mouseleave', function () {
-          el.setAttribute('animation__scale', {
-            property: 'scale',
-            to: '1 1 1',
-            dur: 200,
-            easing: 'easeOutCubic'
-          });
-          if (manager) manager.clearFocused();
-        });
+        const panell = document.querySelector(`#panell-${actionType}`);
+        if (panell) panell.setAttribute('visible', true);
       }
     });
   </script>
 </head>
 <body>
 
-  <!-- Inclusió de la escena amb el Room Manager -->
-  <a-scene room-manager set-background-loading>
+  <a-scene room-manager>
     
-    <!-- GESTIÓ D'ASSETS (Imatges i Models) -->
     <a-assets>
-      <!-- Fons 3D comú -->
+      <!-- Fons 3D -->
       <a-asset-item id="fons-room" src="room.glb"></a-asset-item>
 
-      <!-- Imatges Sala Principal -->
+      <!-- Imatges Estructura -->
       <img id="img-r1" src="r1.png">
       <img id="img-r2" src="r2.png">
       <img id="img-r3" src="r3.png">
       <img id="img-r4" src="r4.png">
       <img id="img-r5" src="r5.png">
 
-      <!-- Imatges Sala R3 -->
+      <!-- Imatges R3 -->
       <img id="img-hydraulics" src="hydraulics.png">
       <img id="img-pedro" src="pedro.png">
       <img id="img-fundiciones" src="fundiciones.png">
@@ -164,92 +164,76 @@
       <img id="img-tekor" src="tekor.png">
     </a-assets>
 
-    <!-- FONS 3D (S'executa a totes les sales) -->
+    <!-- FONS 3D ESTÀTIC -->
     <a-entity gltf-model="#fons-room" position="0 0 0" rotation="0 0 0"></a-entity>
     
-    <!-- LLUMS -->
-    <a-entity light="type: ambient; intensity: 0.8;"></a-entity>
-    <a-entity light="type: directional; intensity: 0.5" position="1 3 1"></a-entity>
+    <a-entity light="type: ambient; intensity: 0.9;"></a-entity>
+    <a-entity light="type: directional; intensity: 0.4" position="2 4 1"></a-entity>
 
-    <!-- CÀMERA I INTERACCIÓ (Meta Quest 3) -->
-    <a-entity id="rig" position="0 1.6 0">
-      <a-entity id="camera" camera look-controls>
-        <!-- Gaze cursor per si es vol provar sense mandos (opcional) -->
-        <a-entity cursor="fuse: false;" position="0 0 -1"
-                  geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.015"
-                  material="color: white; shader: flat; opacity: 0.5">
-        </a-entity>
-      </a-entity>
+    <!-- CÀMERA DE L'USUARI (Sense punters visibles a la pantalla, net de línies) -->
+    <a-entity id="rig" position="0 0 0">
+      <a-entity id="camera" camera look-controls position="0 1.6 0"></a-entity>
       
-      <!-- Mando Dret (El que detecta A i B i serveix de punter apuntant) -->
-      <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .clickable; far: 20; showLine: true;"></a-entity>
-      <!-- Mando Esquerre (Només visual o per moure's si calgués) -->
-      <a-entity id="leftHand" oculus-touch-controls="hand: left"></a-entity>
+      <!-- Connectem els mandos de forma silent per capturar els botons de Meta, sense línies làser reflectides -->
+      <a-entity oculus-touch-controls="hand: right"></a-entity>
+      <a-entity oculus-touch-controls="hand: left"></a-entity>
     </a-entity>
 
 
     <!-- =======================================================
-         1. SALA PRINCIPAL (Envolta l'usuari en 360º de forma pentagonal)
+         1. SALA PRINCIPAL
+         - Més alta: Alçada Y = 2.2 metres
+         - Més gran: Radi de distància = 5.0 metres
          ======================================================= -->
     <a-entity id="sala-principal" visible="true">
-      <!-- Definim posicions circulars en un radi de 3.5 metres -->
-      <a-image class="clickable" hover-scale src="#img-r1" data-target="r1" position="0 1.6 -3.5" rotation="0 0 0" width="1.5" height="1"></a-image>
-      <a-image class="clickable" hover-scale src="#img-r2" data-target="r2" position="3.3 1.6 -1.1" rotation="0 -72 0" width="1.5" height="1"></a-image>
-      <a-image class="clickable" hover-scale src="#img-r3" data-target="r3" position="2.1 1.6 2.8" rotation="0 -144 0" width="1.5" height="1"></a-image>
-      <a-image class="clickable" hover-scale src="#img-r4" data-target="r4" position="-2.1 1.6 2.8" rotation="0 144 0" width="1.5" height="1"></a-image>
-      <a-image class="clickable" hover-scale src="#img-r5" data-target="r5" position="-3.3 1.6 -1.1" rotation="0 72 0" width="1.5" height="1"></a-image>
+      <a-image class="target-look" src="#img-r1" data-target="r1" position="0 2.2 -5.0" rotation="0 0 0" width="1.8" height="1.2"></a-image>
+      <a-image class="target-look" src="#img-r2" data-target="r2" position="4.75 2.2 -1.55" rotation="0 -72 0" width="1.8" height="1.2"></a-image>
+      <a-image class="target-look" src="#img-r3" data-target="r3" position="2.94 2.2 4.05" rotation="0 -144 0" width="1.8" height="1.2"></a-image>
+      <a-image class="target-look" src="#img-r4" data-target="r4" position="-2.94 2.2 4.05" rotation="0 144 0" width="1.8" height="1.2"></a-image>
+      <a-image class="target-look" src="#img-r5" data-target="r5" position="-4.75 2.2 -1.55" rotation="0 72 0" width="1.8" height="1.2"></a-image>
     </a-entity>
 
 
-    <!-- Sales buides per defecte de R1, R2, R4, R5 (només mantenen el fons i es pot prémer B) -->
-    <!-- Podries afegir contingut propi aquí si ho desitges en un futur -->
-    
-
-
     <!-- =======================================================
-         2. SALA R3 (Té 6 imatges al voltant de l'usuari)
+         2. SALA R3
+         - Més alta: Alçada Y = 2.2 metres
+         - Més gran: Radi de distància = 5.0 metres
          ======================================================= -->
     <a-entity id="sala-r3" visible="false">
-      <!-- Definim posicions circulars (hexàgon) en un radi de 3.5 metres -->
-      <a-image class="clickable" hover-scale src="#img-hydraulics" data-target="sub-hydraulics" position="0 1.6 -3.5" rotation="0 0 0" width="1.3" height="0.8"></a-image>
-      <a-image class="clickable" hover-scale src="#img-pedro" data-target="sub-pedro" position="3.0 1.6 -1.75" rotation="0 -60 0" width="1.3" height="0.8"></a-image>
-      <a-image class="clickable" hover-scale src="#img-fundiciones" data-target="sub-fundiciones" position="3.0 1.6 1.75" rotation="0 -120 0" width="1.3" height="0.8"></a-image>
-      <a-image class="clickable" hover-scale src="#img-dinacil" data-target="sub-dinacil" position="0 1.6 3.5" rotation="0 -180 0" width="1.3" height="0.8"></a-image>
-      <a-image class="clickable" hover-scale src="#img-eastern" data-target="sub-eastern" position="-3.0 1.6 1.75" rotation="0 120 0" width="1.3" height="0.8"></a-image>
-      <a-image class="clickable" hover-scale src="#img-tekor" data-target="sub-tekor" position="-3.0 1.6 -1.75" rotation="0 60 0" width="1.3" height="0.8"></a-image>
+      <a-image class="target-look" src="#img-hydraulics" data-target="sub-hydraulics" position="0 2.2 -5.0" rotation="0 0 0" width="1.6" height="1.0"></a-image>
+      <a-image class="target-look" src="#img-pedro" data-target="sub-pedro" position="4.33 2.2 -2.5" rotation="0 -60 0" width="1.6" height="1.0"></a-image>
+      <a-image class="target-look" src="#img-fundiciones" data-target="sub-fundiciones" position="4.33 2.2 2.5" rotation="0 -120 0" width="1.6" height="1.0"></a-image>
+      <a-image class="target-look" src="#img-dinacil" data-target="sub-dinacil" position="0 2.2 5.0" rotation="0 -180 0" width="1.6" height="1.0"></a-image>
+      <a-image class="target-look" src="#img-eastern" data-target="sub-eastern" position="-4.33 2.2 2.5" rotation="0 120 0" width="1.6" height="1.0"></a-image>
+      <a-image class="target-look" src="#img-tekor" data-target="sub-tekor" position="-4.33 2.2 -2.5" rotation="0 60 0" width="1.6" height="1.0"></a-image>
     </a-entity>
 
 
     <!-- =======================================================
-         3. SUB-SALES DE LES 6 IMATGES (Botons Que fem? i Com ho fem?)
+         3. SUB-SALES (Botons text davant l'usuari)
          ======================================================= -->
     <a-entity id="sub-sales" visible="false">
       
-      <!-- Interfície de Textos Comuna al davant (Posicionada a Z = -2.5 metres de l'usuari, fixa al front) -->
-      <!-- Disseny demanat: text blanc, fons negre, vores arrodonides, marge gris -->
-      
-      <!-- Botó: Que Fem? -->
-      <a-entity class="clickable" hover-scale id="btn-quefem" position="-0.75 1.8 -2.5"
-                geometry="primitive: plane; width: 1.2; height: 0.4" 
-                material="color: #000000; shader: flat; radius: 0.05"
+      <!-- Botó: Que Fem? (Disseny: Fons negre, contorn gris, text blanc) -->
+      <a-entity class="target-look" id="btn-quefem" position="-0.8 2.2 -3.0"
+                geometry="primitive: plane; width: 1.3; height: 0.5" 
+                material="color: #000000; shader: flat;"
                 data-action="quefem">
-        <!-- Vora grisa mitjançant una línia de recuadre -->
-        <a-entity geometry="primitive: plane; width: 1.22; height: 0.42" material="color: #888888; shader: flat;" position="0 0 -0.01"></a-entity>
-        <a-text value="Que Fem?" align="center" color="#FFFFFF" width="4" position="0 0 0.01"></a-text>
+        <!-- Contorn exterior gris per simular el contorn i vores -->
+        <a-entity geometry="primitive: plane; width: 1.34; height: 0.54" material="color: #888888; shader: flat;" position="0 0 -0.01"></a-entity>
+        <a-text value="Que Fem?" align="center" color="#FFFFFF" width="4.5" position="0 0 0.02"></a-text>
       </a-entity>
 
       <!-- Botó: Com ho fem? -->
-      <a-entity class="clickable" hover-scale id="btn-comhofem" position="0.75 1.8 -2.5"
-                geometry="primitive: plane; width: 1.2; height: 0.4" 
-                material="color: #000000; shader: flat; radius: 0.05"
+      <a-entity class="target-look" id="btn-comhofem" position="0.8 2.2 -3.0"
+                geometry="primitive: plane; width: 1.3; height: 0.5" 
+                material="color: #000000; shader: flat;"
                 data-action="comhofem">
-        <!-- Vora grisa -->
-        <a-entity geometry="primitive: plane; width: 1.22; height: 0.42" material="color: #888888; shader: flat;" position="0 0 -0.01"></a-entity>
-        <a-text value="Com ho fem?" align="center" color="#FFFFFF" width="4" position="0 0 0.01"></a-text>
+        <!-- Contorn exterior gris -->
+        <a-entity geometry="primitive: plane; width: 1.34; height: 0.54" material="color: #888888; shader: flat;" position="0 0 -0.01"></a-entity>
+        <a-text value="Com ho fem?" align="center" color="#FFFFFF" width="4.5" position="0 0 0.02"></a-text>
       </a-entity>
 
-      <!-- DINÀMICA EXTRA: Ajustem els data-action dinàmicament en entrar a cada sala (ho fa la lògica en activar) -->
-      <!-- CONTINGUTS ESPECÍFICS PER CADA SALA (Es mostren/amaguen segons correspongui) -->
       <a-entity id="sala-hydraulics" class="sub-sala-contingut" visible="false"></a-entity>
       <a-entity id="sala-pedro" class="sub-sala-contingut" visible="false"></a-entity>
       <a-entity id="sala-fundiciones" class="sub-sala-contingut" visible="false"></a-entity>
@@ -260,37 +244,21 @@
 
 
     <!-- =======================================================
-         4. FINESTRES DE TEXT (Es posen a sobre en fer clic a Que Fem / Com ho fem)
+         4. FINESTRES DE TEXT INTERNES
          ======================================================= -->
-    <a-entity id="panells-text" position="0 1.2 -2.2" visible="false">
-      <!-- Marc de la finestra general buida: Fons negre, marge gris, vores rectangulars -->
-      <a-entity geometry="primitive: plane; width: 2.2; height: 1.2" material="color: #000000; shader: flat;"></a-entity>
-      <a-entity geometry="primitive: plane; width: 2.24; height: 1.24" material="color: #888888; shader: flat;" position="0 0 -0.01"></a-entity>
+    <a-entity id="panells-text" position="0 2.0 -2.5" visible="false">
+      <!-- Finestra de dades text blanc, fons negre, contorn gris -->
+      <a-entity geometry="primitive: plane; width: 2.4; height: 1.4" material="color: #000000; shader: flat;"></a-entity>
+      <a-entity geometry="primitive: plane; width: 2.44; height: 1.44" material="color: #888888; shader: flat;" position="0 0 -0.01"></a-entity>
       
-      <!-- Text d'avís de tancament -->
-      <a-text value="Premeu el boto B del mando per tancar" align="center" color="#aaaaaa" width="3" position="0 -0.5 0.02"></a-text>
+      <a-text value="Premeu el boto B / Y per tancar" align="center" color="#888888" width="3.5" position="0 -0.55 0.02"></a-text>
 
-      <!-- Finestres en blanc personalitzables segons text i sala (Diferents per a cada opció) -->
-      <!-- PANELLS HYDRAULICS -->
-      <a-text id="panell-quefem" class="contingut-panell" visible="false" value="[Finestra Buida: Que Fem?]\n\nAquí anirà el contingut personalitzat." align="center" color="#FFFFFF" width="5" position="0 0.1 0.02"></a-text>
-      <a-text id="panell-comhofem" class="contingut-panell" visible="false" value="[Finestra Buida: Com ho fem?]\n\nAquí es descriuran els processos." align="center" color="#FFFFFF" width="5" position="0 0.1 0.02"></a-text>
+      <!-- Continguts per omplir -->
+      <a-text id="panell-quefem" class="contingut-panell" visible="false" value="[Finestra Buida]\n\nSeccio: Que Fem?\n\nText de prova per a la configuracio." align="center" color="#FFFFFF" width="5.5" position="0 0.1 0.02"></a-text>
+      <a-text id="panell-comhofem" class="contingut-panell" visible="false" value="[Finestra Buida]\n\nSeccio: Com ho fem?\n\nText de prova per a la configuracio." align="center" color="#FFFFFF" width="5.5" position="0 0.1 0.02"></a-text>
     </a-entity>
 
   </a-scene>
 
-  <!-- Script addicional per enllaçar de forma dinàmica les sub-sales amb el panell final de text -->
-  <script>
-    document.querySelectorAll('[data-action]').forEach(boto => {
-      boto.addEventListener('click', () => {
-        const accio = boto.getAttribute('data-action');
-        const manager = document.querySelector('a-scene').components['room-manager'];
-        // Generem una ID composta depenent de la sala en la que estem (ex: "quefem" o "comhofem")
-        // Com que demanes finestres que de moment estiguin buides però diferenciades, aquest script obre l'estat general indicat dalt
-        if(manager) {
-          manager.openTextPanel(accio);
-        }
-      });
-    });
-  </script>
 </body>
 </html>
