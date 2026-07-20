@@ -3,19 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Grup ROQUET - Exposició Virtual XR</title>
+<title>WebXR Grua Mecànica - Quest 3</title>
 <style>
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #050505; font-family: sans-serif; color: white; }
-  #info-panel { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 15px 25px; border-radius: 10px; text-align: center; pointer-events: none; border: 1px solid #333; z-index: 10; }
+  #info-panel { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 15px 25px; border-radius: 10px; text-align: center; pointer-events: none; border: 1px solid #333; }
   h1 { margin: 0 0 5px 0; font-size: 20px; color: #00ffcc; }
   p { margin: 0; font-size: 14px; color: #aaa; }
+  canvas { display: block; }
 </style>
 </head>
 <body>
 
 <div id="info-panel">
-  <h1>Grup ROQUET - Història i Futur</h1>
-  <p>Mira fixament els panells de les sales per viatjar-hi o interactuar.</p>
+  <h1>Simulador de Palanques XR</h1>
+  <p>Entra en VR, utilitza els comandaments o les teves <b>mans reals</b> per moure les palanques.</p>
+  <div id="vr-status" style="margin-top: 10px; font-weight: bold; color: #ff9900;">Comprovant WebXR...</div>
 </div>
 
 <script type="importmap">
@@ -30,232 +32,309 @@
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 
-// --- CONFIGURACIÓ BÀSICA ---
+// --- CONFIGURACIÓ DE L'ESCENA I RENDERER ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0c10);
-scene.fog = new THREE.FogExp2(0x0a0c10, 0.1);
+scene.background = new THREE.Color(0x11141a);
+scene.fog = new THREE.FogExp2(0x11141a, 0.15);
 
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-const cameraGroup = new THREE.Group(); // Contenidor per moure l'usuari entre sales
-cameraGroup.position.set(0, 0, 0);
-scene.add(cameraGroup);
-cameraGroup.add(camera);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 50);
 
-// Il·luminació
-const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambient);
-const directional = new THREE.DirectionalLight(0x00ffcc, 0.8);
-directional.position.set(0, 5, 5);
-scene.add(directional);
+// --- IL·LUMINACIÓ STYLED (ESTIL INDUSTRIAL/JOC) ---
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+scene.add(ambientLight);
 
-// --- RAYCASTER PER A LA MIRADA (GAZE) ---
-const raycaster = new THREE.Raycaster();
-const centerScreen = new THREE.Vector2(0, 0);
-let intersectedObject = null;
-let gazeTimer = 0;
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(2, 5, 3);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 1024;
+dirLight.shadow.mapSize.height = 1024;
+scene.add(dirLight);
 
-// Reticle visual al centre de la visió de l'usuari
-const reticleGeo = new THREE.RingGeometry(0.01, 0.02, 32);
-const reticleMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, depthTest: false, transparent: true, opacity: 0.8 });
-const reticle = new THREE.Mesh(reticleGeo, reticleMat);
-reticle.position.z = -2; // Posat a 2 metres de la càmera
-camera.add(reticle);
+const floorGrid = new THREE.GridHelper(20, 20, 0x00ffcc, 0x333333);
+floorGrid.position.y = 0.01;
+scene.add(floorGrid);
 
-// --- TEXTURES I TEXT EN LLAVORS EN CANVAS 2D (DISSENY SOL·LICITAT) ---
-function crearTextPanel(titol, subtitol) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
+// Terra sòlid per rebre ombres
+const floorGeo = new THREE.PlaneGeometry(30, 30);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.8 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
 
-  // Fons rectangle negre
-  ctx.fillStyle = '#000000';
-  
-  // Dibuixar vores arrodonides (radius 20)
-  const r = 20;
-  ctx.beginPath();
-  ctx.moveTo(r, 0);
-  ctx.lineTo(canvas.width - r, 0);
-  ctx.quadraticCurveTo(canvas.width, 0, canvas.width, r);
-  ctx.lineTo(canvas.width, canvas.height - r);
-  ctx.quadraticCurveTo(canvas.width, canvas.height, canvas.width - r, canvas.height);
-  ctx.lineTo(r, canvas.height);
-  ctx.quadraticCurveTo(0, canvas.height, 0, canvas.height - r);
-  ctx.lineTo(0, r);
-  ctx.quadraticCurveTo(0, 0, r, 0);
-  ctx.closePath();
-  ctx.fill();
+// --- CONTEXT: LA CONSOLA DE CONTROL ---
+const consoleGroup = new THREE.Group();
+consoleGroup.position.set(0, 0.9, -0.5); // Just al davant de l'usuari a l'alçada de les mans
+scene.add(consoleGroup);
 
-  // Marje/Línia de contorn gris
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = '#555555';
-  ctx.stroke();
+// Base de la consola
+const baseGeo = new THREE.BoxGeometry(0.6, 0.1, 0.3);
+const baseMat = new THREE.MeshStandardMaterial({ color: 0x2d323f, roughness: 0.5, metalness: 0.6 });
+const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+baseMesh.castShadow = true;
+baseMesh.receiveShadow = true;
+consoleGroup.add(baseMesh);
 
-  // Text Blanc - Títol
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 36px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText(titol, canvas.width / 2, 90);
+// --- CREACIÓ DE LES PALANQUES (ESQUERRA I DRETA) ---
+const palanques = [];
 
-  // Text Blanc/Gris - Subtítol o descripció
-  ctx.fillStyle = '#cccccc';
-  ctx.font = '20px Arial';
-  ctx.fillText(subtitol, canvas.width / 2, 160);
+function crearPalanques() {
+  const configuracions = [
+    { name: 'Esquerra', xOffset: -0.15, color: 0xff3333 },
+    { name: 'Dreta',    xOffset: 0.15,  color: 0x33ff33 }
+  ];
 
-  const texture = new THREE.CanvasTexture(canvas);
-  const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
-  const geometry = new THREE.PlaneGeometry(1.5, 0.75);
-  
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.userData = { originalScale: new THREE.Vector3(1, 1, 1), targetScale: new THREE.Vector3(1, 1, 1) };
-  return mesh;
+  configuracions.forEach((config) => {
+    const pGroup = new THREE.Group();
+    pGroup.position.set(config.xOffset, 0.05, 0); // Posicionada sobre la base
+    consoleGroup.add(pGroup);
+
+    // Articulació esfèrica (Base de la palanca)
+    const socketGeo = new THREE.SphereGeometry(0.03, 16, 16);
+    const socketMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 });
+    const socketMesh = new THREE.Mesh(socketGeo, socketMat);
+    pGroup.add(socketMesh);
+
+    // Part mòbil que rotarà (el pal + el pom)
+    const partMobil = new THREE.Group();
+    pGroup.add(partMobil);
+
+    // El pal (mnec de la palanca)
+    const rodGeo = new THREE.CylinderGeometry(0.008, 0.012, 0.25, 12);
+    rodGeo.translate(0, 0.125, 0); // Moure el pivot a la base del cilindre
+    const rodMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.1 });
+    const rodMesh = new THREE.Mesh(rodGeo, rodMat);
+    rodMesh.castShadow = true;
+    partMobil.add(rodMesh);
+
+    // El pom (la bola superior on s'agafa)
+    const knobGeo = new THREE.SphereGeometry(0.025, 16, 16);
+    knobGeo.translate(0, 0.25, 0); // Posicionar a la punta del pal
+    const knobMat = new THREE.MeshStandardMaterial({ color: config.color, roughness: 0.6 });
+    const knobMesh = new THREE.Mesh(knobGeo, knobMat);
+    knobMesh.castShadow = true;
+    partMobil.add(knobMesh);
+
+    // Guardem la referència de la palanca per a les col·lisions de joc
+    palanques.push({
+      name: config.name,
+      baseWorldPos: new THREE.Vector3(),
+      knobWorldPos: new THREE.Vector3(),
+      partMobil: partMobil,
+      angleX: 0, // Rotació endavant / enrere
+      angleZ: 0, // Rotació esquerra / dreta
+      targetAngleX: 0,
+      targetAngleZ: 0,
+      isGrabbed: false,
+      grabbingController: null
+    });
+  });
+}
+crearPalanques();
+
+// --- VISUALITZACIÓ DE FEEDBACK DE JOC (DUE TORRES S'ENLAIREN) ---
+// Creem dos cubs grans al fons que es mouran segons la posició de les palanques
+const torres = [];
+const torreGeo = new THREE.BoxGeometry(0.4, 2, 0.4);
+torreGeo.translate(0, 1, 0);
+
+const torreEsquerra = new THREE.Mesh(torreGeo, new THREE.MeshStandardMaterial({ color: 0xff3333, metalness: 0.2 }));
+torreEsquerra.position.set(-1.5, 0, -2);
+torreEsquerra.castShadow = true;
+scene.add(torreEsquerra);
+
+const torreDreta = new THREE.Mesh(torreGeo, new THREE.MeshStandardMaterial({ color: 0x33ff33, metalness: 0.2 }));
+torreDreta.position.set(1.5, 0, -2);
+torreDreta.castShadow = true;
+scene.add(torreDreta);
+
+
+// --- CONFIGURACIÓ DE LES MANS I COMANDAMENTS XR ---
+const controllerModelFactory = new XRControllerModelFactory();
+const handModelFactory = new XRHandModelFactory();
+
+// Configurar controladors tradicionals (per si s'usen els comandaments de la Quest)
+const controller1 = renderer.xr.getController(0);
+scene.add(controller1);
+const controller2 = renderer.xr.getController(1);
+scene.add(controller2);
+
+const controllerGrip1 = renderer.xr.getControllerGrip(0);
+controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+scene.add(controllerGrip1);
+
+const controllerGrip2 = renderer.xr.getControllerGrip(1);
+controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+scene.add(controllerGrip2);
+
+// Configurar Mans Reals (Hand Tracking) bàsic de Three.js
+const hand1 = renderer.xr.getHand(0);
+hand1.add(handModelFactory.createHandModel(hand1, "mesh"));
+scene.add(hand1);
+
+const hand2 = renderer.xr.getHand(1);
+hand2.add(handModelFactory.createHandModel(hand2, "mesh"));
+scene.add(hand2);
+
+// Afegim esferes invisibles a la punta dels controladors o índexs de les mans per fer col·lisions directes (estil "tocar i arrossegar")
+const tipGeo = new THREE.SphereGeometry(0.02, 8, 8);
+const tipMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, visible: false }); // Fes-lo visible: true si vols depurar
+
+const interactors = [];
+[controller1, controller2, hand1, hand2].forEach((inputSource) => {
+  const tipMesh = new THREE.Mesh(tipGeo, tipMat);
+  inputSource.add(tipMesh);
+  interactors.push({
+    source: inputSource,
+    tip: tipMesh,
+    worldPosition: new THREE.Vector3(),
+    isSqueezing: false // Per a comandaments es pot usar el gallet, per a mans col·lisió directa per proximitat
+  });
+});
+
+// Detectar quan s'acciona el gallet dels comandaments
+function onSelectStart(event) {
+  const controller = event.target;
+  const interactor = interactors.find(i => i.source === controller);
+  if (interactor) interactor.isSqueezing = true;
+}
+function onSelectEnd(event) {
+  const controller = event.target;
+  const interactor = interactors.find(i => i.source === controller);
+  if (interactor) interactor.isSqueezing = false;
+}
+controller1.addEventListener('selectstart', onSelectStart);
+controller1.addEventListener('selectend', onSelectEnd);
+controller2.addEventListener('selectstart', onSelectStart);
+controller2.addEventListener('selectend', onSelectEnd);
+
+
+// --- BOTÓ VR ---
+const vrButton = VRButton.createButton(renderer, {
+  requiredFeatures: ['local-floor'],
+  optionalFeatures: ['hand-tracking']
+});
+document.body.appendChild(vrButton);
+
+const statusDiv = document.getElementById('vr-status');
+if (navigator.xr) {
+  statusDiv.textContent = "Dispositiu WebXR preparat. Prem 'ENTER VR'.";
+} else {
+  statusDiv.textContent = "WebXR no detectat. Fes servir el navegador de la Meta Quest 3.";
 }
 
-// --- CONFIGURACIÓ DE LES SALES (SALA PRINCIPAL I SUBSALES) ---
-const loader = new GLTFLoader();
-const salesData = [
-  { id: 'principal', name: 'Sala Principal', pos: [0, 0, 0], titol: 'SALA PRINCIPAL', sub: 'Mira una secció per entrar' },
-  { id: 'origens', name: 'Els orígens', pos: [0, 0, -15], titol: 'Els orígens', sub: 'Fundació i primers passos' },
-  { id: 'creixement', name: 'El creixement', pos: [15, 0, 0], titol: 'El creixement', sub: 'Expansió industrial' },
-  { id: 'grup', name: 'El Grup ROQUET', pos: [0, 0, 15], titol: 'El Grup ROQUET', sub: 'Subsales actuals (Tekor, Dinacil...)' },
-  { id: 'impacte', name: 'L\'impacte', pos: [-15, 0, 0], titol: 'L\'impacte', sub: 'Presència global i mercat' },
-  { id: 'futur', name: 'El futur', pos: [0, 15, 0], titol: 'El futur', sub: 'Innovació, R+D i sostenibilitat' }
-];
 
-const interactius = []; // Objectes que reaccionen a la mirada
+// --- LÒGICA D'INTERACCIÓ I ANIMACIÓ DE FILTRE ---
+const maxAngle = 0.6; // Límit físic de moviment de la palanca (~35 graus)
 
-salesData.forEach((sala) => {
-  // 1. Carregar el model arquitectònic (Totes usen room.glb)
-  loader.load('room.glb', (gltf) => {
-    const model = gltf.scene;
-    model.position.set(sala.pos[0], sala.pos[1], sala.pos[2]);
-    scene.add(model);
-  }, undefined, (error) => {
-    // Fallback visual si room.glb triga a carregar o no es troba
-    const fallbackGeo = new THREE.BoxGeometry(8, 4, 8);
-    const fallbackMat = new THREE.MeshStandardMaterial({ color: 0x1f2430, wireframe: true });
-    const fallbackRoom = new THREE.Mesh(fallbackGeo, fallbackMat);
-    fallbackRoom.position.set(sala.pos[0], sala.pos[1] + 2, sala.pos[2]);
-    scene.add(fallbackRoom);
+function processInteractions() {
+  // Actualitzar posicions del món per a tots els interactors i poms de palanques
+  interactors.forEach((interactor) => {
+    interactor.tip.getWorldPosition(interactor.worldPosition);
   });
 
-  // 2. Creació del panell de text amb el disseny demanat
-  const panel = crearTextPanel(sala.titol, sala.sub);
-  
-  if (sala.id === 'principal') {
-    // Panell informatiu central de la sala d'inici
-    panel.position.set(0, 1.6, -3);
-    scene.add(panel);
-  } else {
-    // Els 5 panells de les noves sales es col·loquen al voltant de l'usuari a la sala principal
-    // Calcularem una distribució circular a la Sala Principal
-    const index = salesData.indexOf(sala) - 1; 
-    const angle = (index / 5) * Math.PI * 2; // Repartits en cercle
-    const radi = 4; // Distància respecte al centre (usuari)
+  palanques.forEach((palanca) => {
+    // Obtenir la posició real en l'espai 3D de la base i del pom superior
+    palanca.partMobil.children[1].getWorldPosition(palanca.knobWorldPos); 
+    palanca.partMobil.getWorldPosition(palanca.baseWorldPos);
 
-    panel.position.set(Math.sin(angle) * radi, 1.5, Math.cos(angle) * radi);
-    panel.lookAt(0, 1.5, 0); // Que mirin cap al centre on està l'usuari
-    
-    // Guardem dades per fer el teletransport i l'efecte de tamany al mirar
-    panel.userData.tipus = 'teleport';
-    panel.userData.destiPos = new THREE.Vector3(sala.pos[0], sala.pos[1], sala.pos[2]);
-    panel.userData.originalScale.set(1, 1, 1);
-    panel.userData.targetScale.set(1.2, 1.2, 1.2); // S'engrandeix un 20% al mirar-lo
-    
-    scene.add(panel);
-    interactius.push(panel);
+    let algunInteractorAprop = false;
 
-    // Dins de cada subsala, hi posem un botó de text per Tornar a la Sala Principal
-    const botoTornar = crearTextPanel("TORNAR", "Torna a la sala d'inici");
-    botoTornar.position.set(sala.pos[0], 1.5, sala.pos[2] - 3);
-    botoTornar.lookAt(sala.pos[0], 1.5, sala.pos[2]);
-    botoTornar.userData.tipus = 'teleport';
-    botoTornar.userData.destiPos = new THREE.Vector3(0, 0, 0);
-    botoTornar.userData.originalScale.set(1, 1, 1);
-    botoTornar.userData.targetScale.set(1.1, 1.1, 1.1);
-    
-    scene.add(botoTornar);
-    interactius.push(botoTornar);
-  }
-});
-
-
-// --- BOTÓ WEBXR ---
-document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor'] }));
-
-
-// --- LÒGICA D'ACTUALITZACIÓ (ANIMATION LOOP) ---
-const clock = new THREE.Clock();
-
-renderer.setAnimationLoop(() => {
-  const delta = clock.getDelta();
-
-  // 1. Configuració del Raycaster des de la direcció de la càmera (Gaze Tracking)
-  const cameraDirection = new THREE.Vector3();
-  camera.getWorldDirection(cameraDirection);
-  raycaster.set(camera.getWorldPosition(new THREE.Vector3()), cameraDirection);
-
-  const intersects = raycaster.intersectObjects(interactius);
-
-  if (intersects.length > 0) {
-    const object = intersects[0].object;
-
-    // Si canviem d'objecte mirat
-    if (intersectedObject !== object) {
-      if (intersectedObject) {
-        // El que estàvem mirant torna al seu tamany original
-        intersectedObject.scale.copy(intersectedObject.userData.originalScale);
+    interactors.forEach((interactor) => {
+      // Si la font és una mà, comprovem la punta del dit índex si s'està fent el gest de pinça, 
+      // o per simplificar el joc: interacció directa per proximitat de menys de 6 cm.
+      const dist = interactor.worldPosition.distanceTo(palanca.knobWorldPos);
+      
+      // Condició d'agafar: estar molt a prop (menys de 6cm)
+      if (dist < 0.06) {
+        algunInteractorAprop = true;
+        
+        // Si no estava agafada, l'atrapem
+        if (!palanca.isGrabbed) {
+          palanca.isGrabbed = true;
+          palanca.grabbingController = interactor;
+        }
       }
-      intersectedObject = object;
-      gazeTimer = 0; // Reiniciar temporitzador d'activació
+    });
+
+    // Si està agafada, calculem cap a on apunta la mà respecte a la base de la palanca
+    if (palanca.isGrabbed) {
+      const handPos = palanca.grabbingController.worldPosition;
+      
+      // Vector des de la base de la palanca cap a la mà de l'usuari
+      const localTarget = consoleGroup.worldToLocal(handPos.clone()).sub(consoleGroup.worldToLocal(palanca.baseWorldPos.clone()));
+
+      // Calculem els angles d'inclinació target basats en la posició de la mà
+      // Z local controla rotació a l'eix X (Endavant/Enrere)
+      // X local controla rotació a l'eix Z (Esquerra/Dreta)
+      palanca.targetAngleX = Math.max(-maxAngle, Math.min(maxAngle, localTarget.z * 4));
+      palanca.targetAngleZ = Math.max(-maxAngle, Math.min(maxAngle, -localTarget.x * 4));
+
+      // Deixar anar si la mà s'allunya massa (més de 15cm)
+      const distAncoratge = handPos.distanceTo(palanca.knobWorldPos);
+      if (distAncoratge > 0.15) {
+        palanca.isGrabbed = false;
+        palanca.grabbingController = null;
+      }
+    } else {
+      // Retorn automàtic al centre (estil molla mecànica de joc)
+      palanca.targetAngleX *= 0.85;
+      palanca.targetAngleZ *= 0.85;
     }
 
-    // Efecte visual: Anar escalant cap al tamany objectiu ("una mica més gran")
-    intersectedObject.scale.lerp(intersectedObject.userData.targetScale, 0.1);
+    // Amortiment (Smooth lerp) de la rotació de les palanques per donar sensació de pes real
+    palanca.angleX += (palanca.targetAngleX - palanca.angleX) * 0.2;
+    palanca.angleZ += (palanca.targetAngleZ - palanca.angleZ) * 0.2;
+
+    // Aplicar les rotacions a la peça mòbil 3D
+    palanca.partMobil.rotation.set(palanca.angleX, 0, palanca.angleZ);
+  });
+}
+
+// --- BUCLE PRINCIPAL DE JOC ---
+function animate() {
+  renderer.setAnimationLoop((timestamp, frame) => {
     
-    // Canviar color del reticle per donar feedback
-    reticle.material.color.setHex(0xff9900);
+    // Processar el moviment i agafada de les palanques amb les mans reals
+    processInteractions();
 
-    // Comptador de mirada: si el mires fixament durant 2 segons, fa el canvi de sala
-    gazeTimer += delta;
-    if (gazeTimer >= 2.0) {
-      if (intersectedObject.userData.tipus === 'teleport') {
-        const desti = intersectedObject.userData.destiPos;
-        cameraGroup.position.copy(desti); // Teletransport immediat de l'usuari
-      }
-      gazeTimer = 0;
-    }
-  } else {
-    // Si no es mira res, es retorna l'estat original de l'últim panell seleccionat
-    if (intersectedObject) {
-      intersectedObject.scale.lerp(intersectedObject.userData.originalScale, 0.1);
-      if (intersectedObject.scale.distanceTo(intersectedObject.userData.originalScale) < 0.01) {
-        intersectedObject = null;
-      }
-    }
-    reticle.material.color.setHex(0x00ffcc);
-    gazeTimer = 0;
-  }
+    // MODIFICAR EL JOC EN FUNCIÓ DE LES PALANQUES:
+    // La palanca Esquerra (palanques[0]) mou l'alçada de la torre Esquerra
+    // L'eix X (endavant/enrere) altera l'escala en Y
+    const factorEsquerra = (palanques[0].angleX / maxAngle); // Valor entre -1 i 1
+    torreEsquerra.scale.y = 1 + (factorEsquerra * 0.8);
+    torreEsquerra.material.color.setHex(palanques[0].isGrabbed ? 0xffaa00 : 0xff3333);
 
-  // Renderitzar
-  renderer.render(scene, camera);
-});
+    // La palanca Dreta (palanques[1]) mou l'alçada de la torre Dreta
+    const factorDret = (palanques[1].angleX / maxAngle);
+    torreDreta.scale.y = 1 + (factorDret * 0.8);
+    torreDreta.material.color.setHex(palanques[1].isGrabbed ? 0xffaa00 : 0x33ff33);
 
-// Ajustar el tamany de la finestra per a desenvolupament en PC
+    // Renderitzar l'escena
+    renderer.render(scene, camera);
+  });
+}
+
+animate();
+
+// Ajustar tamany de pantalla per si es veu en mode monitor de PC/Desenvolupament
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
 </script>
 </body>
 </html>
