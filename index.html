@@ -10,7 +10,6 @@
   #status { margin-top: 10px; font-size: 14px; color: #aaa; }
   #controllerInfo { position: absolute; top: 10px; left: 10px; font-size: 12px; line-height: 1.6; background: rgba(0,0,0,0.55); padding: 8px 14px; border-radius: 8px; pointer-events: none; white-space: pre; }
   #hud { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); width: 260px; background: rgba(0,0,0,0.65); color: white; border-radius: 10px; padding: 6px 8px; text-align: center; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
-  #hud img.logo { height: 28px; margin-bottom: 6px; }
   #hud .controller { width: 220px; height: 64px; }
   canvas { display: block; }
 </style>
@@ -24,7 +23,7 @@
 <div id="hud">
   <div style="font-weight:bold; margin-bottom:4px;">ROQUET VR</div>
   <svg class="controller" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
-    <rect x="10" y="20" width="380" height="80" rx="18" fill="#222" stroke="#444"/>
+    <rect x="10" y="20" width="380" height="80" rx="18" fill="#000" stroke="#444" stroke-width="4"/>
     <circle cx="280" cy="60" r="18" fill="#0b0" />
     <text x="280" y="64" font-size="20" fill="#fff" text-anchor="middle">A</text>
     <circle cx="320" cy="60" r="18" fill="#b00" />
@@ -62,8 +61,6 @@ renderer.toneMappingExposure = 1.3;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 
-renderer.xr.addEventListener('sessionstart', () => { resetToMainHubWithGuide(); attachHeadsetVisibilityHandler(); });
-renderer.xr.addEventListener('sessionend', () => { resetToMainHubWithGuide(); detachHeadsetVisibilityHandler(); });
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -77,42 +74,16 @@ scene.add(camera);
 
 const infoEl = document.getElementById('controllerInfo');
 
-// --- CREACIÓ DE TEXTURES COMODÍ (SENSE DEPENDÈNCIA D'ARXIUS EXTERNS PEL LOGO) ---
-function createFallbackLogoTexture(text = "ROQUET") {
-  const canvas = document.createElement('canvas'); canvas.width = 400; canvas.height = 100;
-  const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,400,100);
-  ctx.fillStyle = '#e63946'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, 200, 50);
-  return new THREE.CanvasTexture(canvas);
+// --- FUNCIÓ ESTÀNDARD DE DIBUIX DE RECTANGLES ARRODONITS AMB MARGE GRIS ---
+function drawRoundedPanel(ctx, width, height, radius = 20) {
+  ctx.fillStyle = '#000000';
+  ctx.strokeStyle = '#555555';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.roundRect(10, 10, width - 20, height - 20, radius);
+  ctx.fill();
+  ctx.stroke();
 }
-
-const guideOverlayGroup = new THREE.Group();
-camera.add(guideOverlayGroup);
-guideOverlayGroup.position.set(0, 0, -1.4);
-let guideOverlayVisible = true;
-let headsetVisibilityHandlerAttached = false;
-let lastXRFrameTime = null;
-let pendingHubRecenter = false;
-const HEADSET_OFF_FRAME_GAP_MS = 1000;
-
-function showGuideOverlay() { guideOverlayGroup.visible = true; guideOverlayVisible = true; }
-function hideGuideOverlay() { guideOverlayGroup.visible = false; guideOverlayVisible = false; }
-function resetToMainHubWithGuide() { exitToMainHub(); recenterHubAroundUser(); pendingHubRecenter = true; showGuideOverlay(); }
-function markHeadsetOffOrPaused() { resetToMainHubWithGuide(); lastXRFrameTime = null; }
-function onHeadsetVisibilityChange(event) { const state = event?.session?.visibilityState || renderer.xr.getSession()?.visibilityState; if (state === 'hidden' || state === 'visible' || state === 'visible-blurred') { markHeadsetOffOrPaused(); } }
-function onDocumentVisibilityChange() { if (document.visibilityState === 'visible' || document.visibilityState === 'hidden') { markHeadsetOffOrPaused(); } }
-function attachHeadsetVisibilityHandler() { const session = renderer.xr.getSession(); if (!session || headsetVisibilityHandlerAttached) return; session.addEventListener('visibilitychange', onHeadsetVisibilityChange); document.addEventListener('visibilitychange', onDocumentVisibilityChange); headsetVisibilityHandlerAttached = true; }
-function detachHeadsetVisibilityHandler() { const session = renderer.xr.getSession(); if (session) { session.removeEventListener('visibilitychange', onHeadsetVisibilityChange); } document.removeEventListener('visibilitychange', onDocumentVisibilityChange); headsetVisibilityHandlerAttached = false; lastXRFrameTime = null; }
-
-// Carrega de Logo amb mètode de seguretat
-const texLoader = new THREE.TextureLoader();
-const guideMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.4), new THREE.MeshBasicMaterial({ map: createFallbackLogoTexture("BENVINGUT"), transparent: true, depthTest: false, depthWrite: false }));
-guideMesh.position.set(0, 0, 0.01);
-guideOverlayGroup.add(guideMesh);
-
-texLoader.load('roquet.png', (tex) => {
-  guideMesh.material.map = tex; guideMesh.material.needsUpdate = true;
-}, undefined, () => { console.warn("Usant logo alternatiu per la guia."); });
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.2));
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.6); dirLight.position.set(3, 6, 4); scene.add(dirLight);
@@ -121,25 +92,15 @@ const hud3D = new THREE.Group();
 camera.add(hud3D);
 hud3D.position.set(0, -0.35, -0.9);
 
-const hudBg = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.12), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 }));
-hud3D.add(hudBg);
-
-const logoMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.04), new THREE.MeshBasicMaterial({ map: createFallbackLogoTexture(), transparent: true }));
-logoMesh.position.set(-0.09, 0.02, 0.01);
-hud3D.add(logoMesh);
-
-texLoader.load('roquet.png', (tex) => { logoMesh.material.map = tex; logoMesh.material.needsUpdate = true; });
-
 const ctrlCanvas = document.createElement('canvas'); ctrlCanvas.width = 600; ctrlCanvas.height = 200;
 const cctx = ctrlCanvas.getContext('2d');
 function drawControllerPreview(ctx) {
   ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
-  ctx.fillStyle = '#222'; ctx.strokeStyle = '#444'; ctx.lineWidth = 6;
-  ctx.beginPath(); ctx.roundRect?.(20, 20, ctx.canvas.width-40, ctx.canvas.height-40, 18); ctx.fill(); ctx.stroke();
+  drawRoundedPanel(ctx, 600, 200, 18);
   ctx.fillStyle = '#0b8f0b'; ctx.beginPath(); ctx.arc(420, 100, 28, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('A', 420, 100);
   ctx.fillStyle = '#b00'; ctx.beginPath(); ctx.arc(500, 100, 28, 0, Math.PI*2); ctx.fill(); ctx.fillText('B', 500, 100);
-  ctx.fillStyle = '#ccc'; ctx.font = '18px Arial'; ctx.fillText('A = Entrar', 460, 40); ctx.fillText('B = Sortir', 460, 68);
+  ctx.fillStyle = '#fff'; ctx.font = '18px Arial'; ctx.fillText('A = Entrar', 460, 40); ctx.fillText('B = Sortir', 460, 68);
   ctx.fillStyle = '#888'; ctx.font = '14px Arial'; ctx.fillText('Meta Quest 3', 460, 150);
 }
 drawControllerPreview(cctx);
@@ -152,19 +113,19 @@ hud3D.add(ctrlMesh);
 let state = 'mainHub'; 
 const buttonStates = {};
 const RADIUS = 2.8;
-const HOVER_SCALE = 1.18;
+const HOVER_SCALE = 1.15;
 
 const mainRoomsData = [
   { label: 'Els orígens' }, { label: 'El creixement' }, { label: 'El Grup ROQUET' }, { label: 'L\'impacte' }, { label: 'El futur' }
 ];
 
 const themes = [
-  { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png', text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo', text2: '08551 Tona , Barcelona , España' },
-  { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png', text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.', text2: '08551 Tona , Barcelona, España' },
-  { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png', text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición', text2: '08510, Roda de Ter, Barcelona, España' },
-  { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png', text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Production automatizada de cilindros hidráulicos pequeños.', text2: '08540 , Centelles, Barcelona, España' },
-  { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png', text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.', text2: '107025 Aricestii Rahtivani , Prahova , Romania' },
-  { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png', text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.', text2: '08500 , Vic, Barcelona, España' },
+  { label: 'Ubicació 1', text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo', text2: '08551 Tona , Barcelona , España' },
+  { label: 'Ubicació 2', text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.', text2: '08551 Tona , Barcelona, España' },
+  { label: 'Ubicació 3', text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición', text2: '08510, Roda de Ter, Barcelona, España' },
+  { label: 'Ubicació 4', text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Production automatizada de cilindros hidráulicos pequeños.', text2: '08540 , Centelles, Barcelona, España' },
+  { label: 'Ubicació 5', text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.', text2: '107025 Aricestii Rahtivani , Prahova , Romania' },
+  { label: 'Ubicació 6', text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.', text2: '08500 , Vic, Barcelona, España' },
 ];
 
 const ROOM_TARGET_HEIGHT = 12.0;
@@ -173,7 +134,7 @@ scene.add(backgroundGroup);
 
 function createBoxFallbackRoom() {
   const boxGeo = new THREE.BoxGeometry(20, 10, 20);
-  const boxMat = new THREE.MeshBasicMaterial({ color: 0x1a1a24, side: THREE.BackSide });
+  const boxMat = new THREE.MeshBasicMaterial({ color: 0x111116, side: THREE.BackSide });
   const fallbackMesh = new THREE.Mesh(boxGeo, boxMat);
   fallbackMesh.position.y = 1.5;
   backgroundGroup.add(fallbackMesh);
@@ -203,8 +164,7 @@ function loadRoomBackground() {
     const center = box.getCenter(new THREE.Vector3());
     model.position.x -= center.x; model.position.z -= center.z; model.position.y -= box.min.y; model.position.y -= 4.5; model.rotation.y = Math.PI;
     backgroundGroup.add(model);
-  }, undefined, (error) => { 
-    console.error("No s'ha pogut trobar 'room.glb'. Creant sala d'emergència virtual.", error);
+  }, undefined, () => { 
     createBoxFallbackRoom();
   });
 }
@@ -214,13 +174,7 @@ const mainHubGroup = new THREE.Group(); scene.add(mainHubGroup);
 const subHubGroup = new THREE.Group(); subHubGroup.visible = false; scene.add(subHubGroup);
 const roomGroup = new THREE.Group(); roomGroup.visible = false; scene.add(roomGroup);
 
-function recenterHubAroundUser() { 
-  camera.getWorldPosition(_cam); 
-  mainHubGroup.position.set(_cam.x, 0, _cam.z); 
-  subHubGroup.position.set(_cam.x, 0, _cam.z);
-}
-
-// --- GENERACIÓ DE INTERFÍCIES (AMB TEXT DIRECTE EN CANVAS) ---
+// --- GENERACIÓ DE INTERFÍCIES DEL MAIN HUB ---
 const mainElements = [];
 for (let i = 0; i < mainRoomsData.length; i++) {
   const angle = (i / mainRoomsData.length) * Math.PI * 2;
@@ -228,8 +182,7 @@ for (let i = 0; i < mainRoomsData.length; i++) {
   
   const canvas = document.createElement('canvas'); canvas.width = 600; canvas.height = 180;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(20, 24, 33, 0.95)'; ctx.fillRect(0,0,600,180);
-  ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 6; ctx.strokeRect(10,10,580,160);
+  drawRoundedPanel(ctx, 600, 180, 20);
   ctx.fillStyle = '#ffffff'; ctx.font = 'bold 42px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(mainRoomsData[i].label, 300, 90);
 
@@ -240,40 +193,27 @@ for (let i = 0; i < mainRoomsData.length; i++) {
   mainElements.push({ mesh, index: i, prog: 0 });
 }
 
-const subElements = []; const labelBottomPlanes = [];
+// --- GENERACIÓ DE INTERFÍCIES DEL SUB HUB (NOMÉS TEXT, SENSE IMATGES) ---
+const subElements = [];
 for (let i = 0; i < themes.length; i++) {
   const angle = (i / themes.length) * Math.PI * 2;
   const x = Math.sin(angle) * RADIUS; const z = -Math.cos(angle) * RADIUS;
   const theme = themes[i];
 
-  const bcanvas = document.createElement('canvas'); bcanvas.width = 600; bcanvas.height = 150;
-  const bc = bcanvas.getContext('2d'); bc.fillStyle = '#222'; bc.fillRect(0,0,600,150);
-  bc.fillStyle = '#fff'; bc.font = 'bold 24px Arial'; bc.textAlign = 'center'; bc.textBaseline = 'middle';
-  bc.fillText(theme.label, 300, 40);
-  bc.font = '16px Arial'; bc.fillStyle = '#aaa'; bc.fillText(theme.text2.substring(0,35), 300, 90);
+  const canvas = document.createElement('canvas'); canvas.width = 600; canvas.height = 240;
+  const ctx = canvas.getContext('2d');
+  drawRoundedPanel(ctx, 600, 240, 20);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(theme.label, 300, 75);
+  ctx.font = '20px Arial'; ctx.fillStyle = '#aaaaaa';
+  ctx.fillText(theme.text2, 300, 150);
 
-  const btex = new THREE.CanvasTexture(bcanvas);
-  const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide }));
-  bmesh.position.set(x, 0.6, z); bmesh.lookAt(0, 0.6, 0); subHubGroup.add(bmesh);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.6), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
+  mesh.position.set(x, 1.2, z); mesh.lookAt(0, 1.2, 0);
+  subHubGroup.add(mesh);
 
-  // Generem una miniatura temporal/fallback de color sòlid per evitar esperes infinites d'imatges
-  const fallbackCanvas = document.createElement('canvas'); fallbackCanvas.width = 250; fallbackCanvas.height = 180;
-  const fctx = fallbackCanvas.getContext('2d'); fctx.fillStyle = '#333'; fctx.fillRect(0,0,250,180);
-  fctx.fillStyle = '#fff'; fctx.font = '14px Arial'; fctx.textAlign = 'center'; fctx.fillText("Carregant imatge...", 125, 90);
-
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.8), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(fallbackCanvas), transparent: true, side: THREE.DoubleSide }));
-  mesh.position.set(x, 1.3, z); mesh.lookAt(0, 1.3, 0); subHubGroup.add(mesh);
-
-  texLoader.load(theme.img, (loadedTex) => {
-    mesh.material.map = loadedTex; mesh.material.needsUpdate = true;
-  }, undefined, () => {
-    // Si la imatge física falla, pintem un quadre amb el color corporatiu definit a l'estructura
-    fctx.fillStyle = '#' + theme.color.toString(16).padStart(6, '0'); fctx.fillRect(0,0,250,180);
-    fctx.fillStyle = '#fff'; fctx.font = 'bold 20px Arial'; fctx.fillText(theme.label, 125, 90);
-    mesh.material.map.needsUpdate = true;
-  });
-
-  subElements.push({ mesh, index: i, prog: 0 }); labelBottomPlanes.push(bmesh);
+  subElements.push({ mesh, index: i, prog: 0 });
 }
 
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
@@ -287,7 +227,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
 
 let currentThemeIndex = -1; const roomLabels = []; let roomWindow = null;
 
-function clearGroup(g, preserveKey = '') {
+function clearGroup(g) {
   while (g.children.length) {
     const c = g.children[0]; g.remove(c); c.geometry?.dispose();
     if (c.material) { (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose()); }
@@ -303,11 +243,11 @@ function enterRoom(subIdx) {
   
   for (let i = 0; i < labels.length; i++) {
     const ang = labelAngles[i]; const lx = Math.sin(ang) * RL_RADIUS; const lz = -Math.cos(ang) * RL_RADIUS;
-    const lc = document.createElement('canvas'); lc.width = 512; lc.height = 120; const lctx = lc.getContext('2d');
-    lctx.fillStyle = 'rgba(255,255,255,0.98)'; lctx.fillRect(0,0,512,120);
-    lctx.fillStyle = '#111111'; lctx.font = 'bold 44px Arial'; lctx.textAlign = 'center'; lctx.textBaseline = 'middle'; lctx.fillText(labels[i], 256, 60);
-    const ltex = new THREE.CanvasTexture(lc); const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), new THREE.MeshBasicMaterial({ map: ltex, transparent: true, side: THREE.DoubleSide }));
-    lmesh.position.set(lx, RL_Y, lz); lmesh.lookAt(0, RL_Y, 0); lmesh.material.opacity = 0.4; roomGroup.add(lmesh); roomLabels.push({ mesh: lmesh, index: i, prog: 0, text: labels[i] });
+    const lc = document.createElement('canvas'); lc.width = 512; lc.height = 140; const lctx = lc.getContext('2d');
+    drawRoundedPanel(lctx, 512, 140, 18);
+    lctx.fillStyle = '#ffffff'; lctx.font = 'bold 40px Arial'; lctx.textAlign = 'center'; lctx.textBaseline = 'middle'; lctx.fillText(labels[i], 256, 70);
+    const ltex = new THREE.CanvasTexture(lc); const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.38), new THREE.MeshBasicMaterial({ map: ltex, transparent: true, side: THREE.DoubleSide }));
+    lmesh.position.set(lx, RL_Y, lz); lmesh.lookAt(0, RL_Y, 0); lmesh.material.opacity = 0.5; roomGroup.add(lmesh); roomLabels.push({ mesh: lmesh, index: i, prog: 0, text: labels[i] });
   }
   mainHubGroup.visible = false; subHubGroup.visible = false; roomGroup.visible = true; state = 'room';
 }
@@ -319,16 +259,15 @@ function removeRoomWindow() { if (roomWindow) { roomGroup.remove(roomWindow); ro
 function openLabelWindow(ridx) {
   removeRoomWindow(); const info = roomLabels[ridx]; const p = info.mesh.position.clone();
   const cw = 800, ch = 500; const c = document.createElement('canvas'); c.width = cw; c.height = ch; const ctx = c.getContext('2d');
-  ctx.fillStyle = 'rgba(15,15,22,0.97)'; ctx.fillRect(0,0,cw,ch);
-  ctx.strokeStyle = '#e63946'; ctx.lineWidth = 4; ctx.strokeRect(10,10,cw-20,ch-20);
-  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px Arial'; ctx.fillText(info.text, 40, 70);
-  ctx.fillStyle = '#cccccc'; ctx.font = '22px Arial';
+  drawRoundedPanel(ctx, cw, ch, 24);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 42px Arial'; ctx.fillText(info.text, 50, 80);
+  ctx.fillStyle = '#eeeeee'; ctx.font = '24px Arial';
   
   let desc = "Contingut general del panell informatiu corporatiu de Roquet.";
   if(info.text === 'Historia') desc = "Fundada als anys 40, l'empresa va començar fabricant gasògens i reparant maquinària agrícola. Posteriorment es va especialitzar en components hidràulics d'alta pressió per a exportació mundial.";
   if(info.text === 'Productes') desc = "Fabricació de cilindres hidràulics sofisticats, bombes d'engranatges d'alumini i fosa de ferro, i vàlvules de control o distribuïdors per a maquinària agrícola i d'obres públiques.";
   
-  wrapText(ctx, desc, 40, 150, cw - 80, 32);
+  wrapText(ctx, desc, 50, 160, cw - 100, 36);
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.0), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, side: THREE.DoubleSide }));
   camera.getWorldPosition(_cam); const dir = _cam.clone().sub(p).normalize(); const frontPos = p.clone().add(dir.multiplyScalar(0.4));
   mesh.position.copy(frontPos); mesh.lookAt(_cam.x, frontPos.y, _cam.z); roomGroup.add(mesh); roomWindow = mesh;
@@ -336,7 +275,7 @@ function openLabelWindow(ridx) {
 
 if (navigator.xr) {
   navigator.xr.isSessionSupported('immersive-vr').then(supported => {
-    if (supported) { statusEl.textContent = 'Entorn llest. Prem el botó blau d\'abaix per entrar-hi.'; document.body.appendChild(VRButton.createButton(renderer)); } 
+    if (supported) { statusEl.textContent = 'Entorn virtual llest.'; document.body.appendChild(VRButton.createButton(renderer)); } 
     else { statusEl.textContent = 'Navegador web no compatible amb Realitat Virtual.'; }
   });
 }
@@ -350,56 +289,45 @@ function getLookedRoomLabel() { camera.getWorldDirection(_fwd); camera.getWorldP
 
 function handleInput(frame) {
   const session = renderer.xr.getSession(); if (!session) return;
-  const refSpace = renderer.xr.getReferenceSpace(); let infoText = 'Mandos connectats:\n'; let anyController = false;
+  let infoText = 'Mandos detectats\n'; let anyController = false;
   for (const src of session.inputSources) {
     if (!src.gamepad) continue;
-    if (frame && refSpace) { const space = src.gripSpace || src.targetRaySpace; if (space) { const pose = frame.getPose(space, refSpace); if (pose) { anyController = true; const p = pose.transform.position; infoText += `${src.handedness}: x=${p.x.toFixed(2)} y=${p.y.toFixed(2)}\n`; } } }
+    anyController = true;
     if (src.handedness !== 'right') continue;
     const gp = src.gamepad; const aPressed = gp.buttons[4]?.pressed; const bPressed = gp.buttons[5]?.pressed;
     
     if (aPressed && !buttonStates.a) {
-      if (guideOverlayVisible) { hideGuideOverlay(); } 
-      else if (state === 'mainHub') { const idx = getLookedElement(mainElements); if (idx !== -1) enterSubHub(idx); } 
+      if (state === 'mainHub') { const idx = getLookedElement(mainElements); if (idx !== -1) enterSubHub(idx); } 
       else if (state === 'subHub') { const idx = getLookedElement(subElements); if (idx !== -1) enterRoom(idx); } 
       else if (state === 'room') { if (!roomWindow) { const ridx = getLookedRoomLabel(); if (ridx !== -1) openLabelWindow(ridx); } }
     }
     if (bPressed && !buttonStates.b) {
-      if (guideOverlayVisible) { hideGuideOverlay(); } 
-      else if (state === 'room') { if (roomWindow) { removeRoomWindow(); } else { exitToSubHub(); } } 
+      if (state === 'room') { if (roomWindow) { removeRoomWindow(); } else { exitToSubHub(); } } 
       else if (state === 'subHub') { exitToMainHub(); }
     }
     buttonStates.a = aPressed; buttonStates.b = bPressed;
   }
-  infoEl.textContent = anyController ? infoText : 'Mandos: apunta a la pantalla';
+  infoEl.textContent = anyController ? infoText : 'Apunta amb el mando dret';
 }
 
-const _camPos2D = new THREE.Vector3();
 function animate(time, frame) {
-  if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToMainHubWithGuide(); } 
-  lastXRFrameTime = time;
-  if (pendingHubRecenter && renderer.xr.getSession() && frame) { recenterHubAroundUser(); pendingHubRecenter = false; }
-  
-  camera.getWorldPosition(_camPos2D);
-
   if (state === 'mainHub') {
     const looked = getLookedElement(mainElements);
     for (let i = 0; i < mainElements.length; i++) {
       const e = mainElements[i]; e.prog += (((i === looked) ? 1 : 0) - e.prog) * 0.12;
-      e.mesh.scale.setScalar(1 + (HOVER_SCALE - 1) * e.prog); e.mesh.lookAt(_camPos2D.x, _camPos2D.y, _camPos2D.z);
+      e.mesh.scale.setScalar(1 + (HOVER_SCALE - 1) * e.prog);
     }
   } else if (state === 'subHub') {
     const looked = getLookedElement(subElements);
     for (let i = 0; i < subElements.length; i++) {
       const c = subElements[i]; c.prog += (((i === looked) ? 1 : 0) - c.prog) * 0.12;
-      c.mesh.scale.setScalar(1 + (HOVER_SCALE - 1) * c.prog); c.mesh.lookAt(_camPos2D.x, _camPos2D.y - 0.25, _camPos2D.z);
-      const bp = labelBottomPlanes[i]; bp.material.opacity = 0.4 + 0.6 * c.prog; bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z);
+      c.mesh.scale.setScalar(1 + (HOVER_SCALE - 1) * c.prog);
     }
   } else if (state === 'room') {
     const looked = roomWindow ? -1 : getLookedRoomLabel();
     for (let i = 0; i < roomLabels.length; i++) {
       const r = roomLabels[i]; r.prog += (((i === looked) ? 1 : 0) - r.prog) * 0.12;
-      r.mesh.scale.setScalar(1 + 0.25 * r.prog); r.mesh.material.opacity = roomWindow ? 0.1 : (0.4 + 0.6 * r.prog);
-      r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
+      r.mesh.scale.setScalar(1 + 0.15 * r.prog); r.mesh.material.opacity = roomWindow ? 0.15 : (0.5 + 0.5 * r.prog);
     }
   }
   handleInput(frame); renderer.render(scene, camera);
