@@ -9,7 +9,7 @@
     margin: 0; padding: 0;
     width: 100%; height: 100%;
     overflow: hidden;
-    background: #111;
+    background: #222;
     font-family: Arial, sans-serif;
     color: white;
   }
@@ -102,7 +102,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 let state = 'hub';  
 const buttonStates = {};
 let roomWindow = null;  
-const roomLabels = []; // <── CORREGIT: Ja no és indefinida, s'evita el crash de la app
+const roomLabels = [];
 
 const _fwd = new THREE.Vector3();
 const _cam = new THREE.Vector3();
@@ -115,58 +115,43 @@ renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
+renderer.toneMappingExposure = 1.3;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111);
+// SOLUCIÓ PER ZONES NEGRES: Fons clar per quan el model no cobreix el 100% de l'entorn
+scene.background = new THREE.Color(0xdbe3ed);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 300);
-scene.add(camera); // S'afegeix a l'escena per coherència de transformacions dels fills 3D
+scene.add(camera);
 
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
-// GUIA INICIAL (Interfície sobreposada a la visió)
-const guideOverlayGroup = new THREE.Group();
-camera.add(guideOverlayGroup);
-guideOverlayGroup.position.set(0, 0, -1.4);
-let guideOverlayVisible = true;
 let headsetVisibilityHandlerAttached = false;
 let lastXRFrameTime = null;
 let pendingHubRecenter = false;
 const HEADSET_OFF_FRAME_GAP_MS = 1000;
 
 renderer.xr.addEventListener('sessionstart', () => {
-  resetToHubWithGuide();
+  resetToHub();
   attachHeadsetVisibilityHandler();
 });
 renderer.xr.addEventListener('sessionend', () => {
-  resetToHubWithGuide();
+  resetToHub();
   detachHeadsetVisibilityHandler();
 });
 document.body.appendChild(renderer.domElement);
 
-function showGuideOverlay() {
-  guideOverlayGroup.visible = true;
-  guideOverlayVisible = true;
-}
-
-function hideGuideOverlay() {
-  guideOverlayGroup.visible = false;
-  guideOverlayVisible = false;
-}
-
-function resetToHubWithGuide() {
+function resetToHub() {
   exitRoom();
   recenterHubAroundUser();
   pendingHubRecenter = true;
-  showGuideOverlay();
 }
 
 function markHeadsetOffOrPaused() {
-  resetToHubWithGuide();
+  resetToHub();
   lastXRFrameTime = null;
 }
 
@@ -201,33 +186,15 @@ function detachHeadsetVisibilityHandler() {
   lastXRFrameTime = null;
 }
 
-new THREE.TextureLoader().load('roquet.png', (tex) => {
-  const aspect = (tex.image && tex.image.width) ? (tex.image.width / tex.image.height) : 1;
-  const width = 1.2;
-  const height = width / aspect;
-  const guideMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(width, height),
-    new THREE.MeshBasicMaterial({
-      map: tex,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false
-    })
-  );
-  guideMesh.position.set(0, 0, 0.01);
-  guideOverlayGroup.add(guideMesh);
-});
-showGuideOverlay();
-
-// ─── IL·LUMINACIÓ COMPLETA PER A ESCENES PBR ──────────────────────────
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.0));
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+// ─── IL·LUMINACIÓ AMBIENT SOLUCIONADA PER EVITAR ZONES OBSCURES ───────
+scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2.2));
+const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
 dirLight.position.set(5, 12, 6);
 scene.add(dirLight);
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+const fillLight = new THREE.DirectionalLight(0xffffff, 1.2);
 fillLight.position.set(-5, 6, -6);
 scene.add(fillLight);
-const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+const ambient = new THREE.AmbientLight(0xffffff, 0.8);
 scene.add(ambient);
 
 // ─── HUD 3D ────────────────────────────────────────────────────────────
@@ -330,8 +297,10 @@ function loadRoomBackground(assetPath = 'room.glb') {
         if (obj.isMesh) {
           obj.castShadow = true;
           obj.receiveShadow = true;
-          if (obj.material && obj.material.map) {
-            obj.material.map.colorSpace = THREE.SRGBColorSpace;
+          if (obj.material) {
+            if (obj.material.map) obj.material.map.colorSpace = THREE.SRGBColorSpace;
+            // S'evita que el material es vegi totalment negre sense llum directa
+            obj.material.roughness = Math.min(obj.material.roughness || 1, 0.8);
           }
         }
       });
@@ -458,47 +427,32 @@ for (let i = 0; i < themes.length; i++) {
   labelBottomPlanes.push(bmesh);
 }
 
-function makeRoomPreviewTexture(theme) {
+// SOLUCIÓ: Panel de text clar, nítid i llegible sense blur
+function makeRoomTextPanelCanvas(theme) {
   const S = 512;
-  const off = document.createElement('canvas');
-  off.width = S; off.height = S;
-  const oc = off.getContext('2d');
-  const themeColor = '#' + new THREE.Color(theme.color).getHexString();
-
-  oc.fillStyle = '#aaaaaa';
-  oc.fillRect(0, 0, S, S);
-
-  const cx = S * 0.5, cy = S * 0.48;
-  const margin = S * 0.22;
-
-  oc.fillStyle = '#999999';
-  oc.beginPath(); oc.moveTo(0, 0); oc.lineTo(cx, cy); oc.lineTo(cx, S); oc.lineTo(0, S); oc.closePath(); oc.fill();
-  oc.fillStyle = '#777777';
-  oc.beginPath(); oc.moveTo(S, 0); oc.lineTo(cx, cy); oc.lineTo(cx, S); oc.lineTo(S, S); oc.closePath(); oc.fill();
-  oc.fillStyle = '#111111';
-  oc.beginPath(); oc.moveTo(0, S); oc.lineTo(cx, S * 0.72); oc.lineTo(S, S); oc.closePath(); oc.fill();
-  oc.fillStyle = '#333333';
-  oc.beginPath(); oc.moveTo(0, 0); oc.lineTo(cx, S * 0.22); oc.lineTo(S, 0); oc.closePath(); oc.fill();
-
-  oc.strokeStyle = themeColor; oc.lineWidth = 10; oc.globalAlpha = 0.9;
-  oc.strokeRect(margin, margin, S - margin * 2, S - margin * 2); oc.globalAlpha = 1;
-
   const canvas = document.createElement('canvas');
   canvas.width = S; canvas.height = S;
   const ctx = canvas.getContext('2d');
-  ctx.filter = 'blur(6px)';
-  ctx.drawImage(off, 0, 0);
 
-  ctx.filter = 'none';
-  ctx.globalAlpha = 0.15; ctx.fillStyle = themeColor; ctx.fillRect(0, 0, S, S); ctx.globalAlpha = 1;
+  // Fons blanc estil targeta nítida
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.beginPath();
+  ctx.roundRect(10, 10, S - 20, S - 20, 20);
+  ctx.fill();
+
+  const themeColor = '#' + new THREE.Color(theme.color).getHexString();
+  ctx.strokeStyle = themeColor;
+  ctx.lineWidth = 8;
+  ctx.stroke();
 
   ctx.fillStyle = '#111111';
-  ctx.font = 'bold 24px Arial';
+  ctx.font = 'bold 28px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText(theme.label.toUpperCase(), S/2, 60);
+  ctx.fillText(theme.label.toUpperCase(), S/2, 40);
 
-  ctx.font = '20px Arial';
+  ctx.fillStyle = '#333333';
+  ctx.font = '22px Arial';
   function wrapText(context, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
     let line = '';
@@ -512,7 +466,7 @@ function makeRoomPreviewTexture(theme) {
     }
     context.fillText(line, x, y);
   }
-  wrapText(ctx, theme.text, S/2, 140, S - 80, 28);
+  wrapText(ctx, theme.text, S/2, 100, S - 60, 32);
 
   return canvas;
 }
@@ -578,6 +532,7 @@ function buildRoom(themeIndex) {
   }
 }
 
+// SOLUCIÓ: La finestra d'informació es crea FIXA a l'espai i deixa de seguir la mirada
 function openLabelWindow(ridx) {
   if (roomWindow) { 
     roomGroup.remove(roomWindow); 
@@ -607,18 +562,20 @@ function openLabelWindow(ridx) {
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
     mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), mat);
   } else {
-    const blurredCanvas = makeRoomPreviewTexture(theme);
-    const tex = new THREE.CanvasTexture(blurredCanvas);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.4 });
+    const textCanvas = makeRoomTextPanelCanvas(theme);
+    const tex = new THREE.CanvasTexture(textCanvas);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: true });
     mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), mat);
   }
   
   camera.getWorldPosition(_cam); 
   const dir = _cam.clone().sub(p).normalize(); 
-  const frontPos = p.clone().add(dir.multiplyScalar(0.6));
+  const frontPos = p.clone().add(dir.multiplyScalar(0.4));
   
+  // Posicionat fix en l'espai 3D apuntant cap a l'usuari en aquest moment
   mesh.position.copy(frontPos); 
   mesh.lookAt(_cam.x, frontPos.y, _cam.z); 
+  
   roomGroup.add(mesh); 
   roomWindow = mesh;
 }
@@ -689,13 +646,11 @@ function handleInput(frame) {
     const gp = src.gamepad; const aPressed = gp.buttons[4]?.pressed; const bPressed = gp.buttons[5]?.pressed;
 
     if (aPressed && !buttonStates.a) {
-      if (guideOverlayVisible) { hideGuideOverlay(); } 
-      else if (state === 'hub') { const idx = getLookedCube(); if (idx !== -1) enterRoom(idx); } 
+      if (state === 'hub') { const idx = getLookedCube(); if (idx !== -1) enterRoom(idx); } 
       else if (state === 'room') { const ridx = getLookedRoomLabel(); if (ridx !== -1) openLabelWindow(ridx); }
     }
     if (bPressed && !buttonStates.b) {
-      if (guideOverlayVisible) { hideGuideOverlay(); } 
-      else if (state === 'room') {
+      if (state === 'room') {
         if (roomWindow) {
           roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null;
         } else { exitRoom(); }
@@ -709,7 +664,7 @@ function handleInput(frame) {
 // ─── ANIMACIÓ GLOBAL ───────────────────────────────────────────────────
 function detectHeadsetResumeFromFrameGap(time, frame) {
   if (!renderer.xr.getSession() || !frame) { lastXRFrameTime = null; return; }
-  if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToHubWithGuide(); }
+  if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToHub(); }
   lastXRFrameTime = time;
 }
 
@@ -739,6 +694,7 @@ function animate(time, frame) {
       r.mesh.material.opacity = roomWindow ? 0.0 : (0.4 + 0.6 * r.prog);
       r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
     }
+    // NOTA: roomWindow no es modifica aquí, mantenint la seva posició fixa en l'espai
   }
 
   handleInput(frame);
