@@ -68,8 +68,12 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// ─── VARIABLES GLOBALS I CONTROL DE CODI ──────────────────────────────
-let state = 'hub';  
+// ─── ESTATS DE NAVEGACIÓ ──────────────────────────────────────────────
+// 'mainHub'  -> Els 5 recuadros principals
+// 'groupHub' -> Les 6 imatges de les ubicacions del Grup ROQUET
+// 'emptyRoom'-> Una sala buida (per als altres 4 temes)
+// 'themeRoom'-> La sala interior d'una ubicació concreta
+let state = 'mainHub';  
 const buttonStates = {};
 let roomWindow = null;  
 const roomLabels = [];
@@ -79,24 +83,22 @@ const _cam = new THREE.Vector3();
 const _to  = new THREE.Vector3();
 const _camPos2D = new THREE.Vector3();
 
-// ─── RENDER I CONFIGURACIÓ DE LLUM I CLAROR ──────────────────────────
+// ─── RENDERITZADOR I LLUMS ────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-// Exposició equilibrada (ni massa fosca ni cremada)
 renderer.toneMappingExposure = 1.1;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x333333);
+scene.background = new THREE.Color(0x222222);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 300);
 scene.add(camera);
 
-// Mapa d'entorn neutre per a reflexos naturals als materials PBR
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
@@ -106,23 +108,23 @@ let pendingHubRecenter = false;
 const HEADSET_OFF_FRAME_GAP_MS = 1000;
 
 renderer.xr.addEventListener('sessionstart', () => {
-  resetToHub();
+  resetToMainHub();
   attachHeadsetVisibilityHandler();
 });
 renderer.xr.addEventListener('sessionend', () => {
-  resetToHub();
+  resetToMainHub();
   detachHeadsetVisibilityHandler();
 });
 document.body.appendChild(renderer.domElement);
 
-function resetToHub() {
-  exitRoom();
-  recenterHubAroundUser();
+function resetToMainHub() {
+  exitToMainHub();
+  recenterMainHubAroundUser();
   pendingHubRecenter = true;
 }
 
 function markHeadsetOffOrPaused() {
-  resetToHub();
+  resetToMainHub();
   lastXRFrameTime = null;
 }
 
@@ -157,7 +159,6 @@ function detachHeadsetVisibilityHandler() {
   lastXRFrameTime = null;
 }
 
-// ─── IL·LUMINACIÓ NATURAL I REBALANÇADA ──────────────────────────────
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
 scene.add(hemiLight);
 
@@ -172,8 +173,17 @@ scene.add(dirLight2);
 const ambient = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambient);
 
-// ─── TEMES ────────────────────────────────────────────────────────────
-const themes = [
+// ─── DADES DE LES SECCIONS PRINCIPALS ────────────────────────────────
+const mainSections = [
+  { id: 'origens', label: 'Els orígens', isGroup: false },
+  { id: 'creixement', label: 'El creixement', isGroup: false },
+  { id: 'grup', label: "El Grup ROQUET", isGroup: true },
+  { id: 'impacte', label: "L'impacte", isGroup: false },
+  { id: 'futur', label: 'El futur', isGroup: false }
+];
+
+// ─── DADES DE LES UBICACIONS DE "EL GRUP ROQUET" ──────────────────────
+const groupThemes = [
   { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png', id: 'pedro',
     text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo',
     text2: '08551 Tona , Barcelona , España' },
@@ -194,7 +204,7 @@ const themes = [
     text2: '08500 , Vic, Barcelona, España' },
 ];
 
-// ─── FONS REAL EN 3D ───────────────────────────────────────────────────
+// ─── CARGA DE FONS 3D (ROOM.GLB) ──────────────────────────────────────
 const ROOM_TARGET_HEIGHT = 12.0; 
 const backgroundGroup = new THREE.Group();
 scene.add(backgroundGroup);
@@ -213,12 +223,10 @@ function loadRoomBackground(assetPath = 'room.glb') {
       clearGroup(backgroundGroup);
 
       model.traverse((obj) => {
-        if (obj.isMesh) {
-          if (obj.material) {
-            if (obj.material.map) obj.material.map.colorSpace = THREE.SRGBColorSpace;
-            obj.material.roughness = 0.8;
-            obj.material.metalness = 0.1;
-          }
+        if (obj.isMesh && obj.material) {
+          if (obj.material.map) obj.material.map.colorSpace = THREE.SRGBColorSpace;
+          obj.material.roughness = 0.8;
+          obj.material.metalness = 0.1;
         }
       });
 
@@ -243,106 +251,185 @@ function loadRoomBackground(assetPath = 'room.glb') {
       if (s) s.textContent = 'Fons 3D carregat correctament.';
     },
     undefined,
-    (error) => {
-      console.error(`No s'ha pogut carregar ${assetPath}`, error);
-    }
+    (error) => console.error(`No s'ha pogut carregar ${assetPath}`, error)
   );
 }
 
 loadRoomBackground('room.glb');
 
-// ─── HUB INICIAL AMB ELS PANELLS FLOTANTS ────────────────────────────────
-const hubGroup = new THREE.Group();
-scene.add(hubGroup);
-
-function recenterHubAroundUser() {
-  camera.getWorldPosition(_cam);
-  hubGroup.position.set(_cam.x, 0, _cam.z);
+// ─── HELPER NETEJA GRUPS ──────────────────────────────────────────────
+function clearGroup(g, preserveKey = '') {
+  while (g.children.length) {
+    const c = g.children[0];
+    g.remove(c);
+    if (preserveKey && c.userData?.[preserveKey]) continue;
+    c.geometry?.dispose();
+    if (c.material) {
+      (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose());
+    }
+  }
 }
 
-const IMAGE_WIDTH = 1.2;
-const IMAGE_HEIGHT = .8;
-const HOVER_SCALE = 1.18;
-const RADIUS = 2.8;
-const IMAGE_Y = 1.0;
+// ─── 1. SALA PRINCIPAL (MAIN HUB: 5 SECCIONS) ──────────────────────────
+const mainHubGroup = new THREE.Group();
+scene.add(mainHubGroup);
 
-const loader = new THREE.TextureLoader();
-const cubes = []; 
-const labelBottomPlanes = [];
-let currentActiveThemeIndex = 0;
+function recenterMainHubAroundUser() {
+  camera.getWorldPosition(_cam);
+  mainHubGroup.position.set(_cam.x, 0, _cam.z);
+}
 
-for (let i = 0; i < themes.length; i++) {
-  const angle = (i / themes.length) * Math.PI * 2;
-  const x = Math.sin(angle) * RADIUS;
-  const z = -Math.cos(angle) * RADIUS;
-  const theme = themes[i];
+const mainPanels = [];
+const MAIN_RADIUS = 2.8;
+const MAIN_Y = 1.1;
 
-  const bcanvas = document.createElement('canvas');
-  bcanvas.width = 1024; bcanvas.height = 160;
-  const bc = bcanvas.getContext('2d');
-  bc.clearRect(0,0,bcanvas.width,bcanvas.height);
-  bc.fillStyle = '#ffffff';
-  bc.font = 'bold 40px Arial';
-  bc.textAlign = 'center';
-  
-  function drawWrappedTextCentered(ctx, text, centerX, maxWidth, lineHeight) {
+function createMainHubPanels() {
+  clearGroup(mainHubGroup);
+  mainPanels.length = 0;
+
+  for (let i = 0; i < mainSections.length; i++) {
+    const angle = (i / mainSections.length) * Math.PI * 2;
+    const x = Math.sin(angle) * MAIN_RADIUS;
+    const z = -Math.cos(angle) * MAIN_RADIUS;
+
+    // Generació de textura de fons negre amb vora grisa i textura nítida
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024; canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+
+    // Fons Negre
+    ctx.fillStyle = '#0f1115';
+    ctx.beginPath();
+    ctx.roundRect(16, 16, 1024 - 32, 360 - 32, 40);
+    ctx.fill();
+
+    // Vora Grisa
+    ctx.strokeStyle = '#666666';
+    ctx.lineWidth = 12;
+    ctx.stroke();
+
+    // Text Blanc
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 58px Arial';
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const words = text.split(' ');
-    const lines = [];
-    let line = '';
-    for (let n = 0; n < words.length; n++) {
-      const testLine = line + words[n] + ' ';
-      if (ctx.measureText(testLine).width > maxWidth && n > 0) {
-        lines.push(line.trim());
-        line = words[n] + ' ';
-      } else line = testLine;
-    }
-    if (line) lines.push(line.trim());
-    const totalH = lines.length * lineHeight;
-    const canvasH = ctx.canvas ? ctx.canvas.height : 0;
-    let startY = canvasH / 2 - totalH / 2 + lineHeight / 2;
-    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], centerX, startY + i * lineHeight);
+    ctx.fillText(mainSections[i].label, 1024 / 2, 360 / 2);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.56), mat);
+
+    mesh.position.set(x, MAIN_Y, z);
+    mesh.lookAt(0, MAIN_Y, 0);
+
+    mainHubGroup.add(mesh);
+    mainPanels.push({ mesh, section: mainSections[i], index: i, prog: 0 });
   }
+}
 
-  drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 160, 40);
-  const btex = new THREE.CanvasTexture(bcanvas);
-  const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
-  const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), bmat);
-  bmesh.position.set(x, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, z);
-  bmesh.lookAt(0, IMAGE_Y - IMAGE_HEIGHT/2 - 0.12, 0);
-  hubGroup.add(bmesh);
+createMainHubPanels();
 
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }));
-  mesh.position.set(x, IMAGE_Y, z);
-  mesh.lookAt(0, IMAGE_Y, 0);
-  hubGroup.add(mesh);
-  
-  loader.load(theme.img, (texLoaded) => {
-    mesh.material.map = texLoaded;
-    mesh.material.needsUpdate = true;
-    const iw = texLoaded.image?.naturalWidth || texLoaded.image?.width || 1024;
-    const ih = texLoaded.image?.naturalHeight || texLoaded.image?.height || 1024;
-    const w = IMAGE_WIDTH * 0.5; 
-    const h = w * (ih / iw);
-    mesh.geometry.dispose();
-    mesh.geometry = new THREE.PlaneGeometry(w, h);
+// ─── 2. SUB-HUB: EL GRUP ROQUET (6 IMATGES) ────────────────────────────
+const groupHubGroup = new THREE.Group();
+groupHubGroup.visible = false;
+scene.add(groupHubGroup);
+
+const groupCubes = [];
+const groupLabelPlanes = [];
+const IMAGE_WIDTH = 1.2;
+const IMAGE_Y = 1.0;
+const HOVER_SCALE = 1.18;
+
+function buildGroupHub() {
+  clearGroup(groupHubGroup);
+  groupCubes.length = 0;
+  groupLabelPlanes.length = 0;
+
+  camera.getWorldPosition(_cam);
+  groupHubGroup.position.set(_cam.x, 0, _cam.z);
+
+  const loader = new THREE.TextureLoader();
+
+  for (let i = 0; i < groupThemes.length; i++) {
+    const angle = (i / groupThemes.length) * Math.PI * 2;
+    const x = Math.sin(angle) * MAIN_RADIUS;
+    const z = -Math.cos(angle) * MAIN_RADIUS;
+    const theme = groupThemes[i];
+
+    const bcanvas = document.createElement('canvas');
+    bcanvas.width = 1024; bcanvas.height = 160;
+    const bc = bcanvas.getContext('2d');
+    bc.clearRect(0,0,bcanvas.width,bcanvas.height);
+    bc.fillStyle = '#ffffff';
+    bc.font = 'bold 40px Arial';
+    bc.textAlign = 'center';
+    
+    function drawWrappedTextCentered(ctx, text, centerX, maxWidth, lineHeight) {
+      ctx.textBaseline = 'middle';
+      const words = text.split(' ');
+      const lines = [];
+      let line = '';
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+          lines.push(line.trim());
+          line = words[n] + ' ';
+        } else line = testLine;
+      }
+      if (line) lines.push(line.trim());
+      const totalH = lines.length * lineHeight;
+      const canvasH = ctx.canvas ? ctx.canvas.height : 0;
+      let startY = canvasH / 2 - totalH / 2 + lineHeight / 2;
+      for (let j = 0; j < lines.length; j++) ctx.fillText(lines[j], centerX, startY + j * lineHeight);
+    }
+
+    drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 160, 40);
+    const btex = new THREE.CanvasTexture(bcanvas);
+    const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
+    const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), bmat);
+    bmesh.position.set(x, IMAGE_Y - 0.4 - 0.12, z);
+    bmesh.lookAt(0, IMAGE_Y - 0.4 - 0.12, 0);
+    groupHubGroup.add(bmesh);
+
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }));
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
+    groupHubGroup.add(mesh);
     
-    const labelHeight = 0.36;
-    bmesh.geometry.dispose();
-    bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), labelHeight);
-    const imgBottomY = IMAGE_Y - h / 2;
-    const gap = 0.08;
-    const bY = imgBottomY - gap - labelHeight / 2;
-    const imgPos = mesh.position.clone();
-    bmesh.position.set(imgPos.x, bY, imgPos.z);
-    bmesh.lookAt(0, bY, 0);
-  });
+    loader.load(theme.img, (texLoaded) => {
+      mesh.material.map = texLoaded;
+      mesh.material.needsUpdate = true;
+      const iw = texLoaded.image?.naturalWidth || texLoaded.image?.width || 1024;
+      const ih = texLoaded.image?.naturalHeight || texLoaded.image?.height || 1024;
+      const w = IMAGE_WIDTH * 0.5; 
+      const h = w * (ih / iw);
+      mesh.geometry.dispose();
+      mesh.geometry = new THREE.PlaneGeometry(w, h);
+      mesh.position.set(x, IMAGE_Y, z);
+      mesh.lookAt(0, IMAGE_Y, 0);
+      
+      const labelHeight = 0.36;
+      bmesh.geometry.dispose();
+      bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), labelHeight);
+      const imgBottomY = IMAGE_Y - h / 2;
+      const gap = 0.08;
+      const bY = imgBottomY - gap - labelHeight / 2;
+      const imgPos = mesh.position.clone();
+      bmesh.position.set(imgPos.x, bY, imgPos.z);
+      bmesh.lookAt(0, bY, 0);
+    });
 
-  cubes.push({ mesh, index: i, prog: 0 });
-  labelBottomPlanes.push(bmesh);
+    groupCubes.push({ mesh, index: i, prog: 0 });
+    groupLabelPlanes.push(bmesh);
+  }
 }
+
+// ─── 3. SALA INTERIOR DE TEMES / UBICACIONS / BUIDA ────────────────────
+const roomGroup = new THREE.Group();
+roomGroup.visible = false;
+scene.add(roomGroup);
+
+let currentActiveThemeIndex = 0;
 
 function makeRoomTextPanelCanvas(theme) {
   const S = 512;
@@ -386,28 +473,20 @@ function makeRoomTextPanelCanvas(theme) {
   return canvas;
 }
 
-// ─── SALA INTERIOR: CONTINGUTS FLOTANTS VR ────────────────────────────
-const roomGroup = new THREE.Group();
-roomGroup.visible = false;
-scene.add(roomGroup);
-
-function clearGroup(g, preserveKey = '') {
-  while (g.children.length) {
-    const c = g.children[0];
-    g.remove(c);
-    if (preserveKey && c.userData?.[preserveKey]) continue;
-    c.geometry?.dispose();
-    if (c.material) {
-      (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose());
-    }
-  }
+function buildEmptyRoom() {
+  clearGroup(roomGroup);
+  loadRoomBackground('room.glb');
+  state = 'emptyRoom';
+  mainHubGroup.visible = false;
+  groupHubGroup.visible = false;
+  roomGroup.visible = true;
 }
 
-function buildRoom(themeIndex) {
+function buildThemeRoom(themeIndex) {
   clearGroup(roomGroup);
   currentActiveThemeIndex = themeIndex;
   
-  const theme = themes[themeIndex];
+  const theme = groupThemes[themeIndex];
   if (theme) {
     loadRoomBackground(getThemeBackgroundAsset(theme));
   }
@@ -445,6 +524,11 @@ function buildRoom(themeIndex) {
     roomGroup.add(lmesh);
     roomLabels.push({ mesh: lmesh, index: i, prog: 0, text: labels[i] });
   }
+
+  mainHubGroup.visible = false;
+  groupHubGroup.visible = false;
+  roomGroup.visible = true;
+  state = 'themeRoom';
 }
 
 function openLabelWindow(ridx) {
@@ -458,7 +542,7 @@ function openLabelWindow(ridx) {
   const info = roomLabels[ridx];
   if (!info) return;
   const p = info.mesh.position.clone();
-  const theme = themes[currentActiveThemeIndex];
+  const theme = groupThemes[currentActiveThemeIndex];
 
   let mesh;
 
@@ -493,6 +577,62 @@ function openLabelWindow(ridx) {
   roomWindow = mesh;
 }
 
+// ─── LÒGICA DE DEVOLUCIÓ/SORTIDA (BOTÓ B) ──────────────────────────────
+function exitToMainHub() {
+  clearGroup(roomGroup);
+  clearGroup(groupHubGroup);
+  roomGroup.visible = false;
+  groupHubGroup.visible = false;
+  mainHubGroup.visible = true;
+  loadRoomBackground('room.glb');
+  state = 'mainHub';
+}
+
+function exitToGroupHub() {
+  clearGroup(roomGroup);
+  roomGroup.visible = false;
+  groupHubGroup.visible = true;
+  loadRoomBackground('room.glb');
+  state = 'groupHub';
+}
+
+// ─── RAYCASTING I Detecció de mirada ─────────────────────────────────
+function getLookedMainPanel() {
+  camera.getWorldDirection(_fwd);
+  camera.getWorldPosition(_cam);
+  let best = -1, bestDot = 0.72;
+  for (let i = 0; i < mainPanels.length; i++) {
+    _to.copy(mainPanels[i].mesh.position).sub(_cam).normalize();
+    const d = _fwd.dot(_to);
+    if (d > bestDot) { bestDot = d; best = i; }
+  }
+  return best;
+}
+
+function getLookedGroupCube() {
+  camera.getWorldDirection(_fwd);
+  camera.getWorldPosition(_cam);
+  let best = -1, bestDot = 0.72;
+  for (let i = 0; i < groupCubes.length; i++) {
+    _to.copy(groupCubes[i].mesh.position).sub(_cam).normalize();
+    const d = _fwd.dot(_to);
+    if (d > bestDot) { bestDot = d; best = i; }
+  }
+  return best;
+}
+
+function getLookedRoomLabel() {
+  camera.getWorldDirection(_fwd);
+  camera.getWorldPosition(_cam);
+  let best = -1, bestDot = 0.7;
+  for (let i = 0; i < roomLabels.length; i++) {
+    _to.copy(roomLabels[i].mesh.position).sub(_cam).normalize();
+    const d = _fwd.dot(_to);
+    if (d > bestDot) { bestDot = d; best = i; }
+  }
+  return best;
+}
+
 // ─── BOTÓ WEBXR SUPORT ──────────────────────────────────────────────────
 const statusEl = document.getElementById('status');
 statusEl.textContent = 'Three.js carregat. Comprovant suport VR...';
@@ -512,33 +652,6 @@ if (navigator.xr) {
   statusEl.textContent = 'WebXR absent. Si us plau, utilitza les ulleres Quest 3.';
 }
 
-function getLookedCube() {
-  camera.getWorldDirection(_fwd);
-  camera.getWorldPosition(_cam);
-  let best = -1, bestDot = 0.72;
-  for (let i = 0; i < cubes.length; i++) {
-    _to.copy(cubes[i].mesh.position).sub(_cam).normalize();
-    const d = _fwd.dot(_to);
-    if (d > bestDot) { bestDot = d; best = i; }
-  }
-  return best;
-}
-
-function getLookedRoomLabel() {
-  camera.getWorldDirection(_fwd);
-  camera.getWorldPosition(_cam);
-  let best = -1, bestDot = 0.7;
-  for (let i = 0; i < roomLabels.length; i++) {
-    _to.copy(roomLabels[i].mesh.position).sub(_cam).normalize();
-    const d = _fwd.dot(_to);
-    if (d > bestDot) { bestDot = d; best = i; }
-  }
-  return best;
-}
-
-function enterRoom(idx) { buildRoom(idx); hubGroup.visible = false; roomGroup.visible = true; state = 'room'; }
-function exitRoom() { clearGroup(roomGroup); roomGroup.visible = false; hubGroup.visible = true; loadRoomBackground('room.glb'); state = 'hub'; }
-
 // ─── CONTROLADORS INPUTS MANDOS VR ────────────────────────────────────
 const infoEl = document.getElementById('controllerInfo');
 
@@ -556,17 +669,48 @@ function handleInput(frame) {
       }
     }
     if (src.handedness !== 'right') continue;
-    const gp = src.gamepad; const aPressed = gp.buttons[4]?.pressed; const bPressed = gp.buttons[5]?.pressed;
+    const gp = src.gamepad; 
+    const aPressed = gp.buttons[4]?.pressed; 
+    const bPressed = gp.buttons[5]?.pressed;
 
+    // BOTÓ A (Selecció)
     if (aPressed && !buttonStates.a) {
-      if (state === 'hub') { const idx = getLookedCube(); if (idx !== -1) enterRoom(idx); } 
-      else if (state === 'room') { const ridx = getLookedRoomLabel(); if (ridx !== -1) openLabelWindow(ridx); }
+      if (state === 'mainHub') {
+        const idx = getLookedMainPanel();
+        if (idx !== -1) {
+          const sec = mainSections[idx];
+          if (sec.isGroup) {
+            buildGroupHub();
+            mainHubGroup.visible = false;
+            groupHubGroup.visible = true;
+            state = 'groupHub';
+          } else {
+            buildEmptyRoom();
+          }
+        }
+      } else if (state === 'groupHub') {
+        const idx = getLookedGroupCube();
+        if (idx !== -1) {
+          buildThemeRoom(idx);
+        }
+      } else if (state === 'themeRoom') {
+        const ridx = getLookedRoomLabel();
+        if (ridx !== -1) openLabelWindow(ridx);
+      }
     }
+
+    // BOTÓ B (Tornar enrere)
     if (bPressed && !buttonStates.b) {
-      if (state === 'room') {
+      if (state === 'groupHub' || state === 'emptyRoom') {
+        exitToMainHub();
+      } else if (state === 'themeRoom') {
         if (roomWindow) {
-          roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); roomWindow = null;
-        } else { exitRoom(); }
+          roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); 
+          (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); 
+          roomWindow = null;
+        } else {
+          exitToGroupHub();
+        }
       }
     }
     buttonStates.a = aPressed; buttonStates.b = bPressed;
@@ -574,35 +718,55 @@ function handleInput(frame) {
   if(infoEl) infoEl.textContent = anyController ? infoText : 'Mandos: cap detectat';
 }
 
-// ─── ANIMACIÓ GLOBAL ───────────────────────────────────────────────────
+// ─── BUCLE D'ANIMACIÓ I RENDER ──────────────────────────────────────────
 function detectHeadsetResumeFromFrameGap(time, frame) {
   if (!renderer.xr.getSession() || !frame) { lastXRFrameTime = null; return; }
-  if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToHub(); }
+  if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToMainHub(); }
   lastXRFrameTime = time;
 }
 
 function animate(time, frame) {
   detectHeadsetResumeFromFrameGap(time, frame);
-  if (pendingHubRecenter && renderer.xr.getSession() && frame) { recenterHubAroundUser(); pendingHubRecenter = false; }
+  if (pendingHubRecenter && renderer.xr.getSession() && frame) { 
+    recenterMainHubAroundUser(); 
+    pendingHubRecenter = false; 
+  }
 
-  if (state === 'hub') {
-    camera.getWorldPosition(_camPos2D);
-    const looked = getLookedCube();
-    for (let i = 0; i < cubes.length; i++) {
-      const c = cubes[i]; const target = (i === looked) ? 1 : 0; c.prog += (target - c.prog) * 0.12;
+  camera.getWorldPosition(_camPos2D);
+
+  if (state === 'mainHub') {
+    const looked = getLookedMainPanel();
+    for (let i = 0; i < mainPanels.length; i++) {
+      const p = mainPanels[i];
+      const target = (i === looked) ? 1 : 0;
+      p.prog += (target - p.prog) * 0.12;
+      p.mesh.scale.setScalar(1 + 0.18 * p.prog);
+      p.mesh.lookAt(_camPos2D.x, p.mesh.position.y, _camPos2D.z);
+    }
+  } else if (state === 'groupHub') {
+    const looked = getLookedGroupCube();
+    for (let i = 0; i < groupCubes.length; i++) {
+      const c = groupCubes[i]; 
+      const target = (i === looked) ? 1 : 0; 
+      c.prog += (target - c.prog) * 0.12;
       c.mesh.scale.setScalar(1 + (HOVER_SCALE - 1) * c.prog);
-      const camPos3 = new THREE.Vector3(); camera.getWorldPosition(camPos3); c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
+      const camPos3 = new THREE.Vector3(); 
+      camera.getWorldPosition(camPos3); 
+      c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
 
-      const bp = labelBottomPlanes[i]; const imgPos = c.mesh.position.clone();
+      const bp = groupLabelPlanes[i]; 
+      const imgPos = c.mesh.position.clone();
       bp.position.x = imgPos.x; bp.position.z = imgPos.z;
       bp.material.opacity = 0.25 + 0.75 * c.prog;
-      bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z); bp.rotateX(-0.12);
+      bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z); 
+      bp.rotateX(-0.12);
     }
-  } else if (state === 'room') {
-    camera.getWorldPosition(_camPos2D);
+  } else if (state === 'themeRoom') {
     const looked = roomWindow ? -1 : getLookedRoomLabel();
     for (let i = 0; i < roomLabels.length; i++) {
-      const r = roomLabels[i]; const target = (i === looked) ? 1 : 0; r.prog += (target - r.prog) * 0.12;
+      const r = roomLabels[i]; 
+      const target = (i === looked) ? 1 : 0; 
+      r.prog += (target - r.prog) * 0.12;
       r.mesh.scale.setScalar(1 + 0.25 * r.prog);
       r.mesh.material.opacity = roomWindow ? 0.0 : (0.4 + 0.6 * r.prog);
       r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
