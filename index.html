@@ -69,10 +69,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ─── ESTATS DE NAVEGACIÓ ──────────────────────────────────────────────
-// 'mainHub'  -> Els 5 recuadros principals
-// 'groupHub' -> Les 6 imatges de les ubicacions del Grup ROQUET
-// 'emptyRoom'-> Una sala buida (per als altres 4 temes)
-// 'themeRoom'-> La sala interior d'una ubicació concreta
 let state = 'mainHub';  
 const buttonStates = {};
 let roomWindow = null;  
@@ -292,23 +288,19 @@ function createMainHubPanels() {
     const x = Math.sin(angle) * MAIN_RADIUS;
     const z = -Math.cos(angle) * MAIN_RADIUS;
 
-    // Generació de textura de fons negre amb vora grisa i textura nítida
     const canvas = document.createElement('canvas');
     canvas.width = 1024; canvas.height = 360;
     const ctx = canvas.getContext('2d');
 
-    // Fons Negre
     ctx.fillStyle = '#0f1115';
     ctx.beginPath();
     ctx.roundRect(16, 16, 1024 - 32, 360 - 32, 40);
     ctx.fill();
 
-    // Vora Grisa
     ctx.strokeStyle = '#666666';
     ctx.lineWidth = 12;
     ctx.stroke();
 
-    // Text Blanc
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 58px Arial';
     ctx.textAlign = 'center';
@@ -329,7 +321,7 @@ function createMainHubPanels() {
 
 createMainHubPanels();
 
-// ─── 2. SUB-HUB: EL GRUP ROQUET (6 IMATGES) ────────────────────────────
+// ─── 2. SUB-HUB: EL GRUP ROQUET (6 IMATGES PNG AMB TRANSPARÈNCIA) ──────
 const groupHubGroup = new THREE.Group();
 groupHubGroup.visible = false;
 scene.add(groupHubGroup);
@@ -391,12 +383,22 @@ function buildGroupHub() {
     bmesh.lookAt(0, IMAGE_Y - 0.4 - 0.12, 0);
     groupHubGroup.add(bmesh);
 
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }));
+    // MATERIAL CONFIGURAT PER SUPORTAR PNG TRANSPARENTS SENSE FONS NEGRE
+    const pngMaterial = new THREE.MeshStandardMaterial({ 
+      side: THREE.DoubleSide, 
+      transparent: true, 
+      alphaTest: 0.1,
+      roughness: 0.5,
+      metalness: 0.1
+    });
+
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), pngMaterial);
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     groupHubGroup.add(mesh);
     
     loader.load(theme.img, (texLoaded) => {
+      texLoaded.colorSpace = THREE.SRGBColorSpace;
       mesh.material.map = texLoaded;
       mesh.material.needsUpdate = true;
       const iw = texLoaded.image?.naturalWidth || texLoaded.image?.width || 1024;
@@ -596,7 +598,7 @@ function exitToGroupHub() {
   state = 'groupHub';
 }
 
-// ─── RAYCASTING I Detecció de mirada ─────────────────────────────────
+// ─── RAYCASTING I DETECCIÓ DE MIRADA ─────────────────────────────────
 function getLookedMainPanel() {
   camera.getWorldDirection(_fwd);
   camera.getWorldPosition(_cam);
