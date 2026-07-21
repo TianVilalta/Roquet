@@ -80,8 +80,8 @@ const _to  = new THREE.Vector3();
 const _camPos2D = new THREE.Vector3();
 
 // ─── RENDERITZADOR I LLUMS ────────────────────────────────────────────
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Limitar pixelRatio en VR per estabilitat
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -253,7 +253,7 @@ function loadRoomBackground(assetPath = 'room.glb') {
 
 loadRoomBackground('room.glb');
 
-// ─── HELPER NETEJA GRUPS ──────────────────────────────────────────────
+// ─── HELPER NETEJA GRUPS AMB ALLIBERAMENT DE VRAM ────────────────────
 function clearGroup(g, preserveKey = '') {
   while (g.children.length) {
     const c = g.children[0];
@@ -261,7 +261,11 @@ function clearGroup(g, preserveKey = '') {
     if (preserveKey && c.userData?.[preserveKey]) continue;
     c.geometry?.dispose();
     if (c.material) {
-      (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose());
+      const mats = Array.isArray(c.material) ? c.material : [c.material];
+      mats.forEach(m => {
+        if (m.map) m.map.dispose();
+        m.dispose();
+      });
     }
   }
 }
@@ -289,25 +293,28 @@ function createMainHubPanels() {
     const z = -Math.cos(angle) * MAIN_RADIUS;
 
     const canvas = document.createElement('canvas');
-    canvas.width = 1024; canvas.height = 360;
+    canvas.width = 512; canvas.height = 180; // Reduït canvas per optimitzar memòria
     const ctx = canvas.getContext('2d');
 
     ctx.fillStyle = '#0f1115';
     ctx.beginPath();
-    ctx.roundRect(16, 16, 1024 - 32, 360 - 32, 40);
+    ctx.roundRect(8, 8, 512 - 16, 180 - 16, 20);
     ctx.fill();
 
     ctx.strokeStyle = '#666666';
-    ctx.lineWidth = 12;
+    ctx.lineWidth = 6;
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 58px Arial';
+    ctx.font = 'bold 32px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(mainSections[i].label, 1024 / 2, 360 / 2);
+    ctx.fillText(mainSections[i].label, 512 / 2, 180 / 2);
 
     const tex = new THREE.CanvasTexture(canvas);
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.56), mat);
 
@@ -321,7 +328,7 @@ function createMainHubPanels() {
 
 createMainHubPanels();
 
-// ─── 2. SUB-HUB: EL GRUP ROQUET (6 IMATGES PNG AMB TRANSPARÈNCIA) ──────
+// ─── 2. SUB-HUB: EL GRUP ROQUET (AMB CÀRREGA OPTIMITZADA DE PNGs) ──────
 const groupHubGroup = new THREE.Group();
 groupHubGroup.visible = false;
 scene.add(groupHubGroup);
@@ -349,11 +356,11 @@ function buildGroupHub() {
     const theme = groupThemes[i];
 
     const bcanvas = document.createElement('canvas');
-    bcanvas.width = 1024; bcanvas.height = 160;
+    bcanvas.width = 512; bcanvas.height = 80;
     const bc = bcanvas.getContext('2d');
     bc.clearRect(0,0,bcanvas.width,bcanvas.height);
     bc.fillStyle = '#ffffff';
-    bc.font = 'bold 40px Arial';
+    bc.font = 'bold 20px Arial';
     bc.textAlign = 'center';
     
     function drawWrappedTextCentered(ctx, text, centerX, maxWidth, lineHeight) {
@@ -375,15 +382,17 @@ function buildGroupHub() {
       for (let j = 0; j < lines.length; j++) ctx.fillText(lines[j], centerX, startY + j * lineHeight);
     }
 
-    drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 160, 40);
+    drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 80, 22);
     const btex = new THREE.CanvasTexture(bcanvas);
+    btex.generateMipmaps = true;
+    btex.minFilter = THREE.LinearMipmapLinearFilter;
+
     const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
     const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), bmat);
     bmesh.position.set(x, IMAGE_Y - 0.4 - 0.12, z);
     bmesh.lookAt(0, IMAGE_Y - 0.4 - 0.12, 0);
     groupHubGroup.add(bmesh);
 
-    // MATERIAL CONFIGURAT PER SUPORTAR PNG TRANSPARENTS SENSE FONS NEGRE
     const pngMaterial = new THREE.MeshStandardMaterial({ 
       side: THREE.DoubleSide, 
       transparent: true, 
@@ -397,29 +406,36 @@ function buildGroupHub() {
     mesh.lookAt(0, IMAGE_Y, 0);
     groupHubGroup.add(mesh);
     
-    loader.load(theme.img, (texLoaded) => {
-      texLoaded.colorSpace = THREE.SRGBColorSpace;
-      mesh.material.map = texLoaded;
-      mesh.material.needsUpdate = true;
-      const iw = texLoaded.image?.naturalWidth || texLoaded.image?.width || 1024;
-      const ih = texLoaded.image?.naturalHeight || texLoaded.image?.height || 1024;
-      const w = IMAGE_WIDTH * 0.5; 
-      const h = w * (ih / iw);
-      mesh.geometry.dispose();
-      mesh.geometry = new THREE.PlaneGeometry(w, h);
-      mesh.position.set(x, IMAGE_Y, z);
-      mesh.lookAt(0, IMAGE_Y, 0);
-      
-      const labelHeight = 0.36;
-      bmesh.geometry.dispose();
-      bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), labelHeight);
-      const imgBottomY = IMAGE_Y - h / 2;
-      const gap = 0.08;
-      const bY = imgBottomY - gap - labelHeight / 2;
-      const imgPos = mesh.position.clone();
-      bmesh.position.set(imgPos.x, bY, imgPos.z);
-      bmesh.lookAt(0, bY, 0);
-    });
+    // Càrrega asíncrona progressiva per evitat estancaments/lag
+    setTimeout(() => {
+      loader.load(theme.img, (texLoaded) => {
+        texLoaded.colorSpace = THREE.SRGBColorSpace;
+        texLoaded.generateMipmaps = true;
+        texLoaded.minFilter = THREE.LinearMipmapLinearFilter;
+        
+        mesh.material.map = texLoaded;
+        mesh.material.needsUpdate = true;
+
+        const iw = texLoaded.image?.naturalWidth || texLoaded.image?.width || 512;
+        const ih = texLoaded.image?.naturalHeight || texLoaded.image?.height || 512;
+        const w = IMAGE_WIDTH * 0.5; 
+        const h = w * (ih / iw);
+        mesh.geometry.dispose();
+        mesh.geometry = new THREE.PlaneGeometry(w, h);
+        mesh.position.set(x, IMAGE_Y, z);
+        mesh.lookAt(0, IMAGE_Y, 0);
+        
+        const labelHeight = 0.36;
+        bmesh.geometry.dispose();
+        bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), labelHeight);
+        const imgBottomY = IMAGE_Y - h / 2;
+        const gap = 0.08;
+        const bY = imgBottomY - gap - labelHeight / 2;
+        const imgPos = mesh.position.clone();
+        bmesh.position.set(imgPos.x, bY, imgPos.z);
+        bmesh.lookAt(0, bY, 0);
+      });
+    }, i * 60);
 
     groupCubes.push({ mesh, index: i, prog: 0 });
     groupLabelPlanes.push(bmesh);
@@ -510,15 +526,16 @@ function buildThemeRoom(themeIndex) {
     const lx = Math.sin(ang) * RL_RADIUS;
     const lz = -Math.cos(ang) * RL_RADIUS;
 
-    const lc = document.createElement('canvas'); lc.width = 512; lc.height = 120;
+    const lc = document.createElement('canvas'); lc.width = 256; lc.height = 64;
     const lctx = lc.getContext('2d');
     lctx.clearRect(0,0,lc.width,lc.height);
-    lctx.beginPath(); lctx.moveTo(6+18,6); lctx.arcTo(512-6,6,512-6,120-6,18); lctx.arcTo(512-6,120-6,6,120-6,18); lctx.arcTo(6,120-6,6,6,18); lctx.arcTo(6,6,512-6,6,18); lctx.closePath();
+    lctx.beginPath(); lctx.roundRect(4,4,248,56,12); lctx.closePath();
     lctx.fillStyle = 'rgba(255,255,255,0.98)'; lctx.fill();
-    lctx.fillStyle = '#111111'; lctx.font = 'bold 56px Arial'; lctx.textAlign = 'center';
-    lctx.fillText(labels[i], lc.width/2, lc.height/2 + 8);
+    lctx.fillStyle = '#111111'; lctx.font = 'bold 28px Arial'; lctx.textAlign = 'center';
+    lctx.fillText(labels[i], lc.width/2, lc.height/2 + 4);
 
     const ltex = new THREE.CanvasTexture(lc);
+    ltex.generateMipmaps = true;
     const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), new THREE.MeshBasicMaterial({ map: ltex, transparent: true, side: THREE.DoubleSide }));
     lmesh.position.set(lx, RL_Y, lz);
     lmesh.lookAt(0, RL_Y, 0);
@@ -537,7 +554,10 @@ function openLabelWindow(ridx) {
   if (roomWindow) { 
     roomGroup.remove(roomWindow); 
     roomWindow.geometry?.dispose(); 
-    (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); 
+    (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=> {
+      if (m.map) m.map.dispose();
+      m.dispose();
+    }); 
     roomWindow = null; 
   }
   
@@ -549,13 +569,13 @@ function openLabelWindow(ridx) {
   let mesh;
 
   if (theme && theme.id === 'hydraulics') {
-    const cw = 1024, ch = 512;
+    const cw = 512, ch = 256;
     const c = document.createElement('canvas'); c.width = cw; c.height = ch;
     const ctx = c.getContext('2d');
     ctx.clearRect(0,0,cw,ch);
-    ctx.beginPath(); ctx.moveTo(12+24,12); ctx.arcTo(cw-12,12,cw-12,ch-12,24); ctx.arcTo(cw-12,ch-12,12,ch-12,24); ctx.arcTo(12,ch-12,12,12,24); ctx.arcTo(12,12,cw-12,12,24); ctx.closePath();
+    ctx.beginPath(); ctx.roundRect(8,8,cw-16,ch-16,16); ctx.closePath();
     ctx.fillStyle='rgba(255,255,255,0.98)'; ctx.fill();
-    ctx.fillStyle = '#111111'; ctx.font = 'bold 64px Arial'; ctx.textAlign='center'; 
+    ctx.fillStyle = '#111111'; ctx.font = 'bold 32px Arial'; ctx.textAlign='center'; 
     ctx.fillText(info.text, cw/2, ch/2);
     
     const tex = new THREE.CanvasTexture(c);
@@ -708,7 +728,10 @@ function handleInput(frame) {
       } else if (state === 'themeRoom') {
         if (roomWindow) {
           roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); 
-          (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=>m.dispose()); 
+          (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=> {
+            if (m.map) m.map.dispose();
+            m.dispose();
+          }); 
           roomWindow = null;
         } else {
           exitToGroupHub();
