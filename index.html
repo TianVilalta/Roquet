@@ -81,7 +81,7 @@ const _camPos2D = new THREE.Vector3();
 
 // ─── RENDERITZADOR I LLUMS ────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Limitar pixelRatio en VR per estabilitat
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -181,23 +181,17 @@ const mainSections = [
 // ─── DADES DE LES UBICACIONS DE "EL GRUP ROQUET" ──────────────────────
 const groupThemes = [
   { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png', id: 'pedro',
-    text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo',
-    text2: '08551 Tona , Barcelona , España' },
+    text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo' },
   { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png', id: 'hydraulics',
-    text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.',
-    text2: '08551 Tona , Barcelona, España' },
+    text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.' },
   { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png', id: 'fundiciones',
-    text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición',
-    text2: '08510, Roda de Ter, Barcelona, España' },
+    text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición' },
   { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png', id: 'dinacil',
-    text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.',
-    text2: '08540 , Centelles, Barcelona, España' },
+    text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.' },
   { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png', id: 'eastern',
-    text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos i grandes.',
-    text2: '107025 Aricestii Rahtivani , Prahova , Romania' },
+    text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos i grandes.' },
   { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png', id: 'tekor',
-    text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.',
-    text2: '08500 , Vic, Barcelona, España' },
+    text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.' },
 ];
 
 // ─── CARGA DE FONS 3D (ROOM.GLB) ──────────────────────────────────────
@@ -293,7 +287,7 @@ function createMainHubPanels() {
     const z = -Math.cos(angle) * MAIN_RADIUS;
 
     const canvas = document.createElement('canvas');
-    canvas.width = 512; canvas.height = 180; // Reduït canvas per optimitzar memòria
+    canvas.width = 512; canvas.height = 180;
     const ctx = canvas.getContext('2d');
 
     ctx.fillStyle = '#0f1115';
@@ -328,13 +322,12 @@ function createMainHubPanels() {
 
 createMainHubPanels();
 
-// ─── 2. SUB-HUB: EL GRUP ROQUET (AMB CÀRREGA OPTIMITZADA DE PNGs) ──────
+// ─── 2. SUB-HUB: EL GRUP ROQUET (AMB IMATGES SENSE TEXT INFERIOR) ─────
 const groupHubGroup = new THREE.Group();
 groupHubGroup.visible = false;
 scene.add(groupHubGroup);
 
 const groupCubes = [];
-const groupLabelPlanes = [];
 const IMAGE_WIDTH = 1.2;
 const IMAGE_Y = 1.0;
 const HOVER_SCALE = 1.18;
@@ -342,7 +335,6 @@ const HOVER_SCALE = 1.18;
 function buildGroupHub() {
   clearGroup(groupHubGroup);
   groupCubes.length = 0;
-  groupLabelPlanes.length = 0;
 
   camera.getWorldPosition(_cam);
   groupHubGroup.position.set(_cam.x, 0, _cam.z);
@@ -355,44 +347,6 @@ function buildGroupHub() {
     const z = -Math.cos(angle) * MAIN_RADIUS;
     const theme = groupThemes[i];
 
-    const bcanvas = document.createElement('canvas');
-    bcanvas.width = 512; bcanvas.height = 80;
-    const bc = bcanvas.getContext('2d');
-    bc.clearRect(0,0,bcanvas.width,bcanvas.height);
-    bc.fillStyle = '#ffffff';
-    bc.font = 'bold 20px Arial';
-    bc.textAlign = 'center';
-    
-    function drawWrappedTextCentered(ctx, text, centerX, maxWidth, lineHeight) {
-      ctx.textBaseline = 'middle';
-      const words = text.split(' ');
-      const lines = [];
-      let line = '';
-      for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
-        if (ctx.measureText(testLine).width > maxWidth && n > 0) {
-          lines.push(line.trim());
-          line = words[n] + ' ';
-        } else line = testLine;
-      }
-      if (line) lines.push(line.trim());
-      const totalH = lines.length * lineHeight;
-      const canvasH = ctx.canvas ? ctx.canvas.height : 0;
-      let startY = canvasH / 2 - totalH / 2 + lineHeight / 2;
-      for (let j = 0; j < lines.length; j++) ctx.fillText(lines[j], centerX, startY + j * lineHeight);
-    }
-
-    drawWrappedTextCentered(bc, theme.text2, bcanvas.width/2, bcanvas.width - 80, 22);
-    const btex = new THREE.CanvasTexture(bcanvas);
-    btex.generateMipmaps = true;
-    btex.minFilter = THREE.LinearMipmapLinearFilter;
-
-    const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide });
-    const bmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), bmat);
-    bmesh.position.set(x, IMAGE_Y - 0.4 - 0.12, z);
-    bmesh.lookAt(0, IMAGE_Y - 0.4 - 0.12, 0);
-    groupHubGroup.add(bmesh);
-
     const pngMaterial = new THREE.MeshStandardMaterial({ 
       side: THREE.DoubleSide, 
       transparent: true, 
@@ -401,12 +355,12 @@ function buildGroupHub() {
       metalness: 0.1
     });
 
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1), pngMaterial);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pngMaterial);
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     groupHubGroup.add(mesh);
-    
-    // Càrrega asíncrona progressiva per evitat estancaments/lag
+
+    // Càrrega asíncrona progressiva
     setTimeout(() => {
       loader.load(theme.img, (texLoaded) => {
         texLoaded.colorSpace = THREE.SRGBColorSpace;
@@ -424,21 +378,10 @@ function buildGroupHub() {
         mesh.geometry = new THREE.PlaneGeometry(w, h);
         mesh.position.set(x, IMAGE_Y, z);
         mesh.lookAt(0, IMAGE_Y, 0);
-        
-        const labelHeight = 0.36;
-        bmesh.geometry.dispose();
-        bmesh.geometry = new THREE.PlaneGeometry(Math.max(w * 1.6, 0.6), labelHeight);
-        const imgBottomY = IMAGE_Y - h / 2;
-        const gap = 0.08;
-        const bY = imgBottomY - gap - labelHeight / 2;
-        const imgPos = mesh.position.clone();
-        bmesh.position.set(imgPos.x, bY, imgPos.z);
-        bmesh.lookAt(0, bY, 0);
       });
     }, i * 60);
 
     groupCubes.push({ mesh, index: i, prog: 0 });
-    groupLabelPlanes.push(bmesh);
   }
 }
 
@@ -778,13 +721,6 @@ function animate(time, frame) {
       const camPos3 = new THREE.Vector3(); 
       camera.getWorldPosition(camPos3); 
       c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
-
-      const bp = groupLabelPlanes[i]; 
-      const imgPos = c.mesh.position.clone();
-      bp.position.x = imgPos.x; bp.position.z = imgPos.z;
-      bp.material.opacity = 0.25 + 0.75 * c.prog;
-      bp.lookAt(_camPos2D.x, bp.position.y, _camPos2D.z); 
-      bp.rotateX(-0.12);
     }
   } else if (state === 'themeRoom') {
     const looked = roomWindow ? -1 : getLookedRoomLabel();
