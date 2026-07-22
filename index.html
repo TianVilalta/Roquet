@@ -499,50 +499,29 @@ function openEnlargedOrigensImage(idx) {
   if (origensAnimState !== null) return; 
 
   const item = origensImages[idx];
-  if (!item || !item.mesh.material.map) return;
+  if (!item || !item.mesh || !item.mesh.visible) return;
 
-  const tex = item.mesh.material.map;
-  const iw = tex.image?.naturalWidth || 512;
-  const ih = tex.image?.naturalHeight || 512;
-  
-  // Mida reduïda per evitar que s'ampliï en excés (1.3m d'amplada en lloc de 1.8m)
-  const MAX_WIDTH = 1.3;
-  const h = MAX_WIDTH * (ih / iw);
+  const mesh = item.mesh;
 
-  const mat = new THREE.MeshBasicMaterial({
-    map: tex,
-    transparent: true,
-    side: THREE.DoubleSide
-  });
+  // Posició/escala inicials (posició exacta actual a la paret)
+  const startPos = mesh.position.clone();
+  const startScale = mesh.scale.clone();
 
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(MAX_WIDTH, h), mat);
+  // Calculem la posició final: apropar la imatge en línia recta cap al centre (0, IMAGE_Y, 0)
+  // Aproximadament un 55% més a prop del centre respecte la paret
+  const endPos = startPos.clone().multiplyScalar(0.45);
+  endPos.y = IMAGE_Y;
 
-  // Agafem la posició, rotació i escala EXACTA actual de la imatge d'origen
-  const startPos = item.mesh.position.clone();
-  const startRot = item.mesh.quaternion.clone();
-  const startScale = item.mesh.scale.clone(); 
+  // Escala final desitjada (1.3x de la mida original sense hover)
+  const endScale = new THREE.Vector3(1.3, 1.3, 1.3);
 
-  camera.getWorldPosition(_cam);
-  camera.getWorldDirection(_fwd);
-  const endPos = _cam.clone().add(_fwd.clone().multiplyScalar(1.6));
+  mesh.userData.anim = {
+    startPos,
+    endPos,
+    startScale,
+    endScale
+  };
 
-  const dummy = new THREE.Object3D();
-  dummy.position.copy(endPos);
-  dummy.lookAt(_cam.x, endPos.y, _cam.z);
-  const endRot = dummy.quaternion.clone();
-  const endScale = new THREE.Vector3(1, 1, 1);
-
-  // La imatge ampliada comença exactament amb la mida/posició de la imatge de la paret
-  mesh.position.copy(startPos);
-  mesh.quaternion.copy(startRot);
-  mesh.scale.copy(startScale);
-
-  mesh.userData = { startPos, endPos, startRot, endRot, startScale, endScale, originMesh: item.mesh };
-
-  // Amaguem temporalment la imatge base perquè no hi hagi duplicats visuals
-  item.mesh.visible = false;
-
-  origensGroup.add(mesh);
   origensEnlargedMesh = mesh;
   origensAnimProgress = 0;
   origensAnimState = 'opening';
@@ -556,12 +535,12 @@ function closeEnlargedOrigensImage() {
 
 function closeEnlargedOrigensImageImmediate() {
   if (origensEnlargedMesh) {
-    if (origensEnlargedMesh.userData?.originMesh) {
-      origensEnlargedMesh.userData.originMesh.visible = true;
+    if (origensEnlargedMesh.userData?.anim) {
+      const { startPos, startScale } = origensEnlargedMesh.userData.anim;
+      origensEnlargedMesh.position.copy(startPos);
+      origensEnlargedMesh.scale.copy(startScale);
+      delete origensEnlargedMesh.userData.anim;
     }
-    origensGroup.remove(origensEnlargedMesh);
-    origensEnlargedMesh.geometry?.dispose();
-    if (origensEnlargedMesh.material) origensEnlargedMesh.material.dispose();
     origensEnlargedMesh = null;
   }
   origensAnimState = null;
@@ -935,34 +914,31 @@ function animate(time, frame) {
     }
   } else if (state === 'origensRoom') {
     const looked = getLookedOrigensImage();
+
+    // Actualitzem les imatges normals si no hi ha cap animació activa
     for (let i = 0; i < origensImages.length; i++) {
       const item = origensImages[i];
-      if (!item.mesh.visible) continue;
+      if (!item.mesh.visible || item.mesh === origensEnlargedMesh) continue;
       const target = (i === looked) ? 1 : 0;
       item.prog += (target - item.prog) * 0.12;
       item.mesh.scale.setScalar(1 + 0.22 * item.prog);
-      const camPos3 = new THREE.Vector3();
-      camera.getWorldPosition(camPos3);
-      item.mesh.lookAt(camPos3.x, item.mesh.position.y, camPos3.z);
     }
 
-    // Animació d'ampliar/reduir la imatge
-    if (origensEnlargedMesh && origensAnimState) {
+    // Animació d'ampliar/reduir la imatge directament sobre la mateixa malla
+    if (origensEnlargedMesh && origensAnimState && origensEnlargedMesh.userData?.anim) {
       origensAnimProgress += delta / ANIM_DURATION;
       if (origensAnimProgress >= 1) origensAnimProgress = 1;
 
       const t = smoothstep(origensAnimProgress);
-      const { startPos, endPos, startRot, endRot, startScale, endScale } = origensEnlargedMesh.userData;
+      const { startPos, endPos, startScale, endScale } = origensEnlargedMesh.userData.anim;
 
       if (origensAnimState === 'opening') {
         origensEnlargedMesh.position.lerpVectors(startPos, endPos, t);
-        origensEnlargedMesh.quaternion.slerpQuaternions(startRot, endRot, t);
         origensEnlargedMesh.scale.lerpVectors(startScale, endScale, t);
 
         if (origensAnimProgress >= 1) origensAnimState = null;
       } else if (origensAnimState === 'closing') {
         origensEnlargedMesh.position.lerpVectors(endPos, startPos, t);
-        origensEnlargedMesh.quaternion.slerpQuaternions(endRot, startRot, t);
         origensEnlargedMesh.scale.lerpVectors(endScale, startScale, t);
 
         if (origensAnimProgress >= 1) {
