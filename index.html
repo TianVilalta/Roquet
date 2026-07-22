@@ -73,6 +73,8 @@ let state = 'mainHub';
 const buttonStates = {};
 let roomWindow = null;  
 const roomLabels = [];
+const origensImages = [];
+let origensEnlargedMesh = null;
 
 const _fwd = new THREE.Vector3();
 const _cam = new THREE.Vector3();
@@ -103,6 +105,16 @@ let lastXRFrameTime = null;
 let pendingHubRecenter = false;
 const HEADSET_OFF_FRAME_GAP_MS = 1000;
 
+function recenterVR() {
+  recenterMainHubAroundUser();
+  const session = renderer.xr.getSession();
+  if (session) {
+    session.requestReferenceSpace('local-floor').then((refSpace) => {
+      renderer.xr.setReferenceSpace(refSpace);
+    }).catch(() => {});
+  }
+}
+
 renderer.xr.addEventListener('sessionstart', () => {
   resetToMainHub();
   attachHeadsetVisibilityHandler();
@@ -115,7 +127,7 @@ document.body.appendChild(renderer.domElement);
 
 function resetToMainHub() {
   exitToMainHub();
-  recenterMainHubAroundUser();
+  recenterVR();
   pendingHubRecenter = true;
 }
 
@@ -270,7 +282,16 @@ scene.add(mainHubGroup);
 
 function recenterMainHubAroundUser() {
   camera.getWorldPosition(_cam);
+  camera.getWorldDirection(_fwd);
+  _fwd.y = 0;
+  _fwd.normalize();
+
   mainHubGroup.position.set(_cam.x, 0, _cam.z);
+  
+  if (_fwd.lengthSq() > 0) {
+    const angle = Math.atan2(_fwd.x, _fwd.z);
+    mainHubGroup.rotation.y = angle - Math.PI;
+  }
 }
 
 const mainPanels = [];
@@ -322,7 +343,7 @@ function createMainHubPanels() {
 
 createMainHubPanels();
 
-// ─── 2. SUB-HUB: EL GRUP ROQUET (AMB IMATGES SENSE TEXT INFERIOR I SENSE FLAIX BLANC) ─────
+// ─── 2. SUB-HUB: EL GRUP ROQUET ────────────────────────────────────────
 const groupHubGroup = new THREE.Group();
 groupHubGroup.visible = false;
 scene.add(groupHubGroup);
@@ -355,14 +376,12 @@ function buildGroupHub() {
       metalness: 0.1
     });
 
-    // Inicialment es crea invisible per evitar el flaix blanc del material buit
     const mesh = new THREE.Mesh(new THREE.BufferGeometry(), pngMaterial);
     mesh.visible = false; 
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     groupHubGroup.add(mesh);
 
-    // Càrrega asíncrona progressiva
     setTimeout(() => {
       loader.load(theme.img, (texLoaded) => {
         texLoaded.colorSpace = THREE.SRGBColorSpace;
@@ -382,7 +401,6 @@ function buildGroupHub() {
         mesh.position.set(x, IMAGE_Y, z);
         mesh.lookAt(0, IMAGE_Y, 0);
 
-        // Es fa visible únicament quan la textura i la geometria ja estan a punt
         mesh.visible = true; 
       });
     }, i * 60);
@@ -391,7 +409,131 @@ function buildGroupHub() {
   }
 }
 
-// ─── 3. SALA INTERIOR DE TEMES / UBICACIONS / BUIDA ────────────────────
+// ─── 3. SALA "ELS ORÍGENS" (7 IMATGES) ──────────────────────────────────
+const origensGroup = new THREE.Group();
+origensGroup.visible = false;
+scene.add(origensGroup);
+
+function buildOrigensRoom() {
+  clearGroup(origensGroup);
+  origensImages.length = 0;
+  origensEnlargedMesh = null;
+
+  camera.getWorldPosition(_cam);
+  origensGroup.position.set(_cam.x, 0, _cam.z);
+
+  const loader = new THREE.TextureLoader();
+  const count = 7;
+  const radius = 2.6;
+
+  for (let i = 1; i <= count; i++) {
+    const angle = ((i - 1) / count) * Math.PI * 2;
+    const x = Math.sin(angle) * radius;
+    const z = -Math.cos(angle) * radius;
+    const imgPath = `/ElsOrígens/h${i}.png`;
+
+    const mat = new THREE.MeshStandardMaterial({
+      side: THREE.DoubleSide,
+      transparent: true,
+      alphaTest: 0.1,
+      roughness: 0.4,
+      metalness: 0.1
+    });
+
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+    mesh.visible = false;
+    mesh.position.set(x, IMAGE_Y, z);
+    mesh.lookAt(0, IMAGE_Y, 0);
+    origensGroup.add(mesh);
+
+    loader.load(imgPath, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.generateMipmaps = true;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+
+      mesh.material.map = tex;
+      mesh.material.needsUpdate = true;
+
+      const iw = tex.image?.naturalWidth || 512;
+      const ih = tex.image?.naturalHeight || 512;
+      const w = 1.0;
+      const h = w * (ih / iw);
+
+      mesh.geometry.dispose();
+      mesh.geometry = new THREE.PlaneGeometry(w, h);
+      mesh.position.set(x, IMAGE_Y, z);
+      mesh.lookAt(0, IMAGE_Y, 0);
+
+      mesh.visible = true;
+    });
+
+    origensImages.push({ mesh, index: i - 1, prog: 0, path: imgPath });
+  }
+
+  loadRoomBackground('room.glb');
+  mainHubGroup.visible = false;
+  groupHubGroup.visible = false;
+  roomGroup.visible = false;
+  origensGroup.visible = true;
+  state = 'origensRoom';
+}
+
+function openEnlargedOrigensImage(idx) {
+  if (origensEnlargedMesh) closeEnlargedOrigensImage();
+
+  const item = origensImages[idx];
+  if (!item || !item.mesh.material.map) return;
+
+  const tex = item.mesh.material.map;
+  const iw = tex.image?.naturalWidth || 512;
+  const ih = tex.image?.naturalHeight || 512;
+
+  const w = 1.8;
+  const h = w * (ih / iw);
+
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    side: THREE.DoubleSide
+  });
+
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+
+  camera.getWorldPosition(_cam);
+  camera.getWorldDirection(_fwd);
+
+  const pos = _cam.clone().add(_fwd.clone().multiplyScalar(1.6));
+  mesh.position.copy(pos);
+  mesh.lookAt(_cam.x, pos.y, _cam.z);
+
+  origensGroup.add(mesh);
+  origensEnlargedMesh = mesh;
+}
+
+function closeEnlargedOrigensImage() {
+  if (origensEnlargedMesh) {
+    origensGroup.remove(origensEnlargedMesh);
+    origensEnlargedMesh.geometry?.dispose();
+    if (origensEnlargedMesh.material) origensEnlargedMesh.material.dispose();
+    origensEnlargedMesh = null;
+  }
+}
+
+function getLookedOrigensImage() {
+  if (origensEnlargedMesh) return -1;
+  camera.getWorldDirection(_fwd);
+  camera.getWorldPosition(_cam);
+  let best = -1, bestDot = 0.75;
+  for (let i = 0; i < origensImages.length; i++) {
+    if (!origensImages[i].mesh.visible) continue;
+    _to.copy(origensImages[i].mesh.position).sub(_cam).normalize();
+    const d = _fwd.dot(_to);
+    if (d > bestDot) { bestDot = d; best = i; }
+  }
+  return best;
+}
+
+// ─── 4. SALA INTERIOR DE TEMES / UBICACIONS / BUIDA ────────────────────
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
@@ -446,6 +588,7 @@ function buildEmptyRoom() {
   state = 'emptyRoom';
   mainHubGroup.visible = false;
   groupHubGroup.visible = false;
+  origensGroup.visible = false;
   roomGroup.visible = true;
 }
 
@@ -495,6 +638,7 @@ function buildThemeRoom(themeIndex) {
 
   mainHubGroup.visible = false;
   groupHubGroup.visible = false;
+  origensGroup.visible = false;
   roomGroup.visible = true;
   state = 'themeRoom';
 }
@@ -552,8 +696,11 @@ function openLabelWindow(ridx) {
 function exitToMainHub() {
   clearGroup(roomGroup);
   clearGroup(groupHubGroup);
+  clearGroup(origensGroup);
+  closeEnlargedOrigensImage();
   roomGroup.visible = false;
   groupHubGroup.visible = false;
+  origensGroup.visible = false;
   mainHubGroup.visible = true;
   loadRoomBackground('room.glb');
   state = 'mainHub';
@@ -651,7 +798,9 @@ function handleInput(frame) {
         const idx = getLookedMainPanel();
         if (idx !== -1) {
           const sec = mainSections[idx];
-          if (sec.isGroup) {
+          if (sec.id === 'origens') {
+            buildOrigensRoom();
+          } else if (sec.isGroup) {
             buildGroupHub();
             mainHubGroup.visible = false;
             groupHubGroup.visible = true;
@@ -659,6 +808,11 @@ function handleInput(frame) {
           } else {
             buildEmptyRoom();
           }
+        }
+      } else if (state === 'origensRoom') {
+        const idx = getLookedOrigensImage();
+        if (idx !== -1) {
+          openEnlargedOrigensImage(idx);
         }
       } else if (state === 'groupHub') {
         const idx = getLookedGroupCube();
@@ -673,7 +827,13 @@ function handleInput(frame) {
 
     // BOTÓ B (Tornar enrere)
     if (bPressed && !buttonStates.b) {
-      if (state === 'groupHub' || state === 'emptyRoom') {
+      if (state === 'origensRoom') {
+        if (origensEnlargedMesh) {
+          closeEnlargedOrigensImage();
+        } else {
+          exitToMainHub();
+        }
+      } else if (state === 'groupHub' || state === 'emptyRoom') {
         exitToMainHub();
       } else if (state === 'themeRoom') {
         if (roomWindow) {
@@ -703,7 +863,7 @@ function detectHeadsetResumeFromFrameGap(time, frame) {
 function animate(time, frame) {
   detectHeadsetResumeFromFrameGap(time, frame);
   if (pendingHubRecenter && renderer.xr.getSession() && frame) { 
-    recenterMainHubAroundUser(); 
+    recenterVR(); 
     pendingHubRecenter = false; 
   }
 
@@ -717,6 +877,18 @@ function animate(time, frame) {
       p.prog += (target - p.prog) * 0.12;
       p.mesh.scale.setScalar(1 + 0.18 * p.prog);
       p.mesh.lookAt(_camPos2D.x, p.mesh.position.y, _camPos2D.z);
+    }
+  } else if (state === 'origensRoom') {
+    const looked = getLookedOrigensImage();
+    for (let i = 0; i < origensImages.length; i++) {
+      const item = origensImages[i];
+      if (!item.mesh.visible) continue;
+      const target = (i === looked) ? 1 : 0;
+      item.prog += (target - item.prog) * 0.12;
+      item.mesh.scale.setScalar(1 + 0.22 * item.prog);
+      const camPos3 = new THREE.Vector3();
+      camera.getWorldPosition(camPos3);
+      item.mesh.lookAt(camPos3.x, item.mesh.position.y, camPos3.z);
     }
   } else if (state === 'groupHub') {
     const looked = getLookedGroupCube();
