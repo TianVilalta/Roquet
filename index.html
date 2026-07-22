@@ -322,7 +322,7 @@ function createMainHubPanels() {
 
 createMainHubPanels();
 
-// ─── 2. SUB-HUB: EL GRUP ROQUET (AMB IMATGES SENSE TEXT INFERIOR) ─────
+// ─── 2. SUB-HUB: EL GRUP ROQUET (AMB IMATGES SENSE TEXT INFERIOR I SENSE FLAIX BLANC) ─────
 const groupHubGroup = new THREE.Group();
 groupHubGroup.visible = false;
 scene.add(groupHubGroup);
@@ -355,7 +355,9 @@ function buildGroupHub() {
       metalness: 0.1
     });
 
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pngMaterial);
+    // Inicialment es crea invisible per evitar el flaix blanc del material buit
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), pngMaterial);
+    mesh.visible = false; 
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     groupHubGroup.add(mesh);
@@ -374,10 +376,14 @@ function buildGroupHub() {
         const ih = texLoaded.image?.naturalHeight || texLoaded.image?.height || 512;
         const w = IMAGE_WIDTH * 0.5; 
         const h = w * (ih / iw);
+
         mesh.geometry.dispose();
         mesh.geometry = new THREE.PlaneGeometry(w, h);
         mesh.position.set(x, IMAGE_Y, z);
         mesh.lookAt(0, IMAGE_Y, 0);
+
+        // Es fa visible únicament quan la textura i la geometria ja estan a punt
+        mesh.visible = true; 
       });
     }, i * 60);
 
@@ -579,6 +585,7 @@ function getLookedGroupCube() {
   camera.getWorldPosition(_cam);
   let best = -1, bestDot = 0.72;
   for (let i = 0; i < groupCubes.length; i++) {
+    if (!groupCubes[i].mesh.visible) continue;
     _to.copy(groupCubes[i].mesh.position).sub(_cam).normalize();
     const d = _fwd.dot(_to);
     if (d > bestDot) { bestDot = d; best = i; }
@@ -715,6 +722,7 @@ function animate(time, frame) {
     const looked = getLookedGroupCube();
     for (let i = 0; i < groupCubes.length; i++) {
       const c = groupCubes[i]; 
+      if (!c.mesh.visible) continue;
       const target = (i === looked) ? 1 : 0; 
       c.prog += (target - c.prog) * 0.12;
       c.mesh.scale.setScalar(1 + (HOVER_SCALE - 1) * c.prog);
