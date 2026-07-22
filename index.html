@@ -74,12 +74,22 @@ const buttonStates = {};
 let roomWindow = null;  
 const roomLabels = [];
 const origensImages = [];
+
+// Variables per l'animació d'ampliació d'imatges
 let origensEnlargedMesh = null;
+let origensAnimState = null; // 'opening' | 'closing' | null
+let origensAnimProgress = 0; // 0 a 1
+const ANIM_DURATION = 0.5; // Segons
 
 const _fwd = new THREE.Vector3();
 const _cam = new THREE.Vector3();
 const _to  = new THREE.Vector3();
 const _camPos2D = new THREE.Vector3();
+
+// Funció d'interpolació suau (Ease-In-Out Smoothstep)
+function smoothstep(t) {
+  return t * t * (3 - 2 * t);
+}
 
 // ─── RENDERITZADOR I LLUMS ────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -409,7 +419,7 @@ function buildGroupHub() {
   }
 }
 
-// ─── 3. SALA "ELS ORÍGENS" (7 IMATGES) ──────────────────────────────────
+// ─── 3. SALA "ELS ORÍGENS" (7 IMATGES AMB ANIMACIÓ) ─────────────────────
 const origensGroup = new THREE.Group();
 origensGroup.visible = false;
 scene.add(origensGroup);
@@ -417,7 +427,7 @@ scene.add(origensGroup);
 function buildOrigensRoom() {
   clearGroup(origensGroup);
   origensImages.length = 0;
-  origensEnlargedMesh = null;
+  closeEnlargedOrigensImageImmediate();
 
   camera.getWorldPosition(_cam);
   origensGroup.position.set(_cam.x, 0, _cam.z);
@@ -430,8 +440,6 @@ function buildOrigensRoom() {
     const angle = ((i - 1) / count) * Math.PI * 2;
     const x = Math.sin(angle) * radius;
     const z = -Math.cos(angle) * radius;
-    
-    // Ruta relativa directament a la carpeta de les imatges
     const imgPath = `./ElsOrígens/h${i}.png`;
 
     const mat = new THREE.MeshStandardMaterial({
@@ -442,9 +450,9 @@ function buildOrigensRoom() {
       metalness: 0.1
     });
 
-    // Inicialitzem amb un pla per defecte de 1x1 perquè no falli
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-    mesh.visible = true;
+    // Mesh invisible inicialment per evadir el rectangle blanc
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+    mesh.visible = false; 
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     origensGroup.add(mesh);
@@ -468,10 +476,12 @@ function buildOrigensRoom() {
         mesh.geometry = new THREE.PlaneGeometry(w, h);
         mesh.position.set(x, IMAGE_Y, z);
         mesh.lookAt(0, IMAGE_Y, 0);
+
+        mesh.visible = true; // Es fa visible només quan la textura està a punt
       },
       undefined,
       (err) => {
-        console.error(`Error de la imatge: No s'ha trobat la ruta ${imgPath}. Revisa si la carpeta es diu "ElsOrígens" o "origens".`, err);
+        console.error(`Error de la imatge: No s'ha trobat ${imgPath}.`, err);
       }
     );
 
@@ -487,7 +497,7 @@ function buildOrigensRoom() {
 }
 
 function openEnlargedOrigensImage(idx) {
-  if (origensEnlargedMesh) closeEnlargedOrigensImage();
+  if (origensAnimState !== null) return; // Si ja s'està animant, ignora
 
   const item = origensImages[idx];
   if (!item || !item.mesh.material.map) return;
@@ -495,7 +505,6 @@ function openEnlargedOrigensImage(idx) {
   const tex = item.mesh.material.map;
   const iw = tex.image?.naturalWidth || 512;
   const ih = tex.image?.naturalHeight || 512;
-
   const w = 1.8;
   const h = w * (ih / iw);
 
@@ -507,24 +516,47 @@ function openEnlargedOrigensImage(idx) {
 
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
 
+  // Guardem posició/rotació inicial i final per a l'animació
+  const startPos = item.mesh.position.clone();
+  const startRot = item.mesh.quaternion.clone();
+
   camera.getWorldPosition(_cam);
   camera.getWorldDirection(_fwd);
+  const endPos = _cam.clone().add(_fwd.clone().multiplyScalar(1.6));
 
-  const pos = _cam.clone().add(_fwd.clone().multiplyScalar(1.6));
-  mesh.position.copy(pos);
-  mesh.lookAt(_cam.x, pos.y, _cam.z);
+  // Dummy per trobar la rotació final de cara a la càmera
+  const dummy = new THREE.Object3D();
+  dummy.position.copy(endPos);
+  dummy.lookAt(_cam.x, endPos.y, _cam.z);
+  const endRot = dummy.quaternion.clone();
+
+  mesh.position.copy(startPos);
+  mesh.quaternion.copy(startRot);
+  mesh.scale.set(0.2, 0.2, 0.2); // Comença petit
+
+  mesh.userData = { startPos, endPos, startRot, endRot };
 
   origensGroup.add(mesh);
   origensEnlargedMesh = mesh;
+  origensAnimProgress = 0;
+  origensAnimState = 'opening';
 }
 
 function closeEnlargedOrigensImage() {
+  if (!origensEnlargedMesh || origensAnimState !== null) return;
+  origensAnimProgress = 0;
+  origensAnimState = 'closing';
+}
+
+function closeEnlargedOrigensImageImmediate() {
   if (origensEnlargedMesh) {
     origensGroup.remove(origensEnlargedMesh);
     origensEnlargedMesh.geometry?.dispose();
     if (origensEnlargedMesh.material) origensEnlargedMesh.material.dispose();
     origensEnlargedMesh = null;
   }
+  origensAnimState = null;
+  origensAnimProgress = 0;
 }
 
 function getLookedOrigensImage() {
@@ -705,7 +737,7 @@ function exitToMainHub() {
   clearGroup(roomGroup);
   clearGroup(groupHubGroup);
   clearGroup(origensGroup);
-  closeEnlargedOrigensImage();
+  closeEnlargedOrigensImageImmediate();
   roomGroup.visible = false;
   groupHubGroup.visible = false;
   origensGroup.visible = false;
@@ -862,6 +894,8 @@ function handleInput(frame) {
 }
 
 // ─── BUCLE D'ANIMACIÓ I RENDER ──────────────────────────────────────────
+let lastClockTime = performance.now();
+
 function detectHeadsetResumeFromFrameGap(time, frame) {
   if (!renderer.xr.getSession() || !frame) { lastXRFrameTime = null; return; }
   if (lastXRFrameTime !== null && time - lastXRFrameTime > HEADSET_OFF_FRAME_GAP_MS) { resetToMainHub(); }
@@ -869,6 +903,10 @@ function detectHeadsetResumeFromFrameGap(time, frame) {
 }
 
 function animate(time, frame) {
+  const now = performance.now();
+  const delta = Math.min((now - lastClockTime) / 1000, 0.1); // Delta en segons
+  lastClockTime = now;
+
   detectHeadsetResumeFromFrameGap(time, frame);
   if (pendingHubRecenter && renderer.xr.getSession() && frame) { 
     recenterVR(); 
@@ -897,6 +935,33 @@ function animate(time, frame) {
       const camPos3 = new THREE.Vector3();
       camera.getWorldPosition(camPos3);
       item.mesh.lookAt(camPos3.x, item.mesh.position.y, camPos3.z);
+    }
+
+    // Animació d'ampliar/reduir la imatge gran
+    if (origensEnlargedMesh && origensAnimState) {
+      origensAnimProgress += delta / ANIM_DURATION;
+      if (origensAnimProgress >= 1) origensAnimProgress = 1;
+
+      const t = smoothstep(origensAnimProgress);
+      const { startPos, endPos, startRot, endRot } = origensEnlargedMesh.userData;
+
+      if (origensAnimState === 'opening') {
+        origensEnlargedMesh.position.lerpVectors(startPos, endPos, t);
+        origensEnlargedMesh.quaternion.slerpQuaternions(startRot, endRot, t);
+        const sc = THREE.MathUtils.lerp(0.2, 1.0, t);
+        origensEnlargedMesh.scale.setScalar(sc);
+
+        if (origensAnimProgress >= 1) origensAnimState = null;
+      } else if (origensAnimState === 'closing') {
+        origensEnlargedMesh.position.lerpVectors(endPos, startPos, t);
+        origensEnlargedMesh.quaternion.slerpQuaternions(endRot, startRot, t);
+        const sc = THREE.MathUtils.lerp(1.0, 0.2, t);
+        origensEnlargedMesh.scale.setScalar(sc);
+
+        if (origensAnimProgress >= 1) {
+          closeEnlargedOrigensImageImmediate();
+        }
+      }
     }
   } else if (state === 'groupHub') {
     const looked = getLookedGroupCube();
