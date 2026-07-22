@@ -430,7 +430,9 @@ function buildOrigensRoom() {
     const angle = ((i - 1) / count) * Math.PI * 2;
     const x = Math.sin(angle) * radius;
     const z = -Math.cos(angle) * radius;
-    const imgPath = `/ElsOrígens/h${i}.png`;
+    
+    // Ruta relativa directament a la carpeta de les imatges
+    const imgPath = `./ElsOrígens/h${i}.png`;
 
     const mat = new THREE.MeshStandardMaterial({
       side: THREE.DoubleSide,
@@ -440,32 +442,38 @@ function buildOrigensRoom() {
       metalness: 0.1
     });
 
-    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
-    mesh.visible = false;
+    // Inicialitzem amb un pla per defecte de 1x1 perquè no falli
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    mesh.visible = true;
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     origensGroup.add(mesh);
 
-    loader.load(imgPath, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.generateMipmaps = true;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
+    loader.load(
+      imgPath,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
 
-      mesh.material.map = tex;
-      mesh.material.needsUpdate = true;
+        mesh.material.map = tex;
+        mesh.material.needsUpdate = true;
 
-      const iw = tex.image?.naturalWidth || 512;
-      const ih = tex.image?.naturalHeight || 512;
-      const w = 1.0;
-      const h = w * (ih / iw);
+        const iw = tex.image?.naturalWidth || 512;
+        const ih = tex.image?.naturalHeight || 512;
+        const w = 1.0;
+        const h = w * (ih / iw);
 
-      mesh.geometry.dispose();
-      mesh.geometry = new THREE.PlaneGeometry(w, h);
-      mesh.position.set(x, IMAGE_Y, z);
-      mesh.lookAt(0, IMAGE_Y, 0);
-
-      mesh.visible = true;
-    });
+        mesh.geometry.dispose();
+        mesh.geometry = new THREE.PlaneGeometry(w, h);
+        mesh.position.set(x, IMAGE_Y, z);
+        mesh.lookAt(0, IMAGE_Y, 0);
+      },
+      undefined,
+      (err) => {
+        console.error(`Error de la imatge: No s'ha trobat la ruta ${imgPath}. Revisa si la carpeta es diu "ElsOrígens" o "origens".`, err);
+      }
+    );
 
     origensImages.push({ mesh, index: i - 1, prog: 0, path: imgPath });
   }
