@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Roquet VR</title>
+<title>Roquet AR - Realitat Augmentada</title>
 <style>
   html, body {
     margin: 0; padding: 0;
     width: 100%; height: 100%;
     overflow: hidden;
-    background: #1a1a1a;
+    background: transparent; /* Permet veure el fons si s'utilitza navegador */
     font-family: Arial, sans-serif;
     color: white;
   }
@@ -38,10 +38,10 @@
 </head>
 <body>
 <div id="overlay">
-  <h2>Sales VR — Quest 3</h2>
+  <h2>Sales AR — Quest 3</h2>
   <div id="status">Carregant...</div>
 </div>
-<div id="controllerInfo">Mandos: esperant sessió VR...</div>
+<div id="controllerInfo">Mandos: esperant sessió AR...</div>
 
 <script type="importmap">
 {
@@ -64,8 +64,7 @@
 
 <script type="module">
 import * as THREE from 'three';
-import { VRButton } from 'three/addons/webxr/VRButton.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { ARButton } from 'three/addons/webxr/ARButton.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ─── ESTATS DE NAVEGACIÓ ──────────────────────────────────────────────
@@ -91,8 +90,12 @@ function smoothstep(t) {
   return t * t * (3 - 2 * t);
 }
 
-// ─── RENDERITZADOR I LLUMS ────────────────────────────────────────────
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+// ─── RENDERITZADOR I LLUMS (CONFIGURAT PER A AR) ────────────────────
+const renderer = new THREE.WebGLRenderer({ 
+  antialias: true, 
+  alpha: true, // Permet la transparència del fons per a Passthrough AR
+  powerPreference: "high-performance" 
+});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -102,7 +105,7 @@ renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x222222);
+scene.background = null; // Fons nul per mostrar el món real (Passthrough)
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 300);
 scene.add(camera);
@@ -216,59 +219,6 @@ const groupThemes = [
     text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.' },
 ];
 
-// ─── CARGA DE FONS 3D (ROOM.GLB) ──────────────────────────────────────
-const ROOM_TARGET_HEIGHT = 12.0; 
-const backgroundGroup = new THREE.Group();
-scene.add(backgroundGroup);
-
-function getThemeBackgroundAsset(theme) {
-  if (!theme?.img) return 'room.glb';
-  return theme.img.replace(/\.[^.]+$/, '.glb');
-}
-
-function loadRoomBackground(assetPath = 'room.glb') {
-  const glLoader = new GLTFLoader();
-  glLoader.load(
-    assetPath,
-    (gltf) => {
-      const model = gltf.scene;
-      clearGroup(backgroundGroup);
-
-      model.traverse((obj) => {
-        if (obj.isMesh && obj.material) {
-          if (obj.material.map) obj.material.map.colorSpace = THREE.SRGBColorSpace;
-          obj.material.roughness = 0.8;
-          obj.material.metalness = 0.1;
-        }
-      });
-
-      const box = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const height = size.y || 1;
-      const scale = ROOM_TARGET_HEIGHT / height;
-      model.scale.setScalar(scale);
-
-      box.setFromObject(model);
-      const center = box.getCenter(new THREE.Vector3());
-      model.position.x -= center.x;
-      model.position.z -= center.z;
-      model.position.y -= box.min.y;
-      model.position.y -= 4.5; 
-      model.rotation.y = Math.PI;
-
-      backgroundGroup.add(model);
-      
-      const s = document.getElementById('status');
-      if (s) s.textContent = 'Fons 3D carregat correctament.';
-    },
-    undefined,
-    (error) => console.error(`No s'ha pogut carregar ${assetPath}`, error)
-  );
-}
-
-loadRoomBackground('room.glb');
-
 // ─── HELPER NETEJA GRUPS AMB ALLIBERAMENT DE VRAM ────────────────────
 function clearGroup(g, preserveKey = '') {
   while (g.children.length) {
@@ -321,12 +271,12 @@ function createMainHubPanels() {
     canvas.width = 512; canvas.height = 180;
     const ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = '#0f1115';
+    ctx.fillStyle = 'rgba(15, 17, 21, 0.85)'; // Fons semi-transparent per integrar-se en AR
     ctx.beginPath();
     ctx.roundRect(8, 8, 512 - 16, 180 - 16, 20);
     ctx.fill();
 
-    ctx.strokeStyle = '#666666';
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 6;
     ctx.stroke();
 
@@ -419,7 +369,7 @@ function buildGroupHub() {
   }
 }
 
-// ─── 3. SALA "ELS ORÍGENS" (7 IMATGES AMB ANIMACIÓ CONTROLADA) ─────────
+// ─── 3. SALA "ELS ORÍGENS" (ANIMACIÓ DIRECTA RECTA) ────────────────────
 const origensGroup = new THREE.Group();
 origensGroup.visible = false;
 scene.add(origensGroup);
@@ -487,7 +437,6 @@ function buildOrigensRoom() {
     origensImages.push({ mesh, index: i - 1, prog: 0, path: imgPath });
   }
 
-  loadRoomBackground('room.glb');
   mainHubGroup.visible = false;
   groupHubGroup.visible = false;
   roomGroup.visible = false;
@@ -503,24 +452,16 @@ function openEnlargedOrigensImage(idx) {
 
   const mesh = item.mesh;
 
-  // Posició/escala inicials (posició exacta actual a la paret)
   const startPos = mesh.position.clone();
   const startScale = mesh.scale.clone();
 
-  // Calculem la posició final: apropar la imatge en línia recta cap al centre (0, IMAGE_Y, 0)
-  // Aproximadament un 55% més a prop del centre respecte la paret
+  // Apropar la imatge en línia recta cap al centre
   const endPos = startPos.clone().multiplyScalar(0.45);
   endPos.y = IMAGE_Y;
 
-  // Escala final desitjada (1.3x de la mida original sense hover)
   const endScale = new THREE.Vector3(1.3, 1.3, 1.3);
 
-  mesh.userData.anim = {
-    startPos,
-    endPos,
-    startScale,
-    endScale
-  };
+  mesh.userData.anim = { startPos, endPos, startScale, endScale };
 
   origensEnlargedMesh = mesh;
   origensAnimProgress = 0;
@@ -561,7 +502,7 @@ function getLookedOrigensImage() {
   return best;
 }
 
-// ─── 4. SALA INTERIOR DE TEMES / UBICACIONS / BUIDA ────────────────────
+// ─── 4. SALA INTERIOR DE TEMES / UBICACIONS ────────────────────────────
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
@@ -574,7 +515,7 @@ function makeRoomTextPanelCanvas(theme) {
   canvas.width = S; canvas.height = S;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
   ctx.beginPath();
   ctx.roundRect(10, 10, S - 20, S - 20, 20);
   ctx.fill();
@@ -612,7 +553,6 @@ function makeRoomTextPanelCanvas(theme) {
 
 function buildEmptyRoom() {
   clearGroup(roomGroup);
-  loadRoomBackground('room.glb');
   state = 'emptyRoom';
   mainHubGroup.visible = false;
   groupHubGroup.visible = false;
@@ -623,11 +563,6 @@ function buildEmptyRoom() {
 function buildThemeRoom(themeIndex) {
   clearGroup(roomGroup);
   currentActiveThemeIndex = themeIndex;
-  
-  const theme = groupThemes[themeIndex];
-  if (theme) {
-    loadRoomBackground(getThemeBackgroundAsset(theme));
-  }
 
   roomLabels.length = 0; 
   const labels = ['Historia', 'Productes', 'Grup'];
@@ -730,7 +665,6 @@ function exitToMainHub() {
   groupHubGroup.visible = false;
   origensGroup.visible = false;
   mainHubGroup.visible = true;
-  loadRoomBackground('room.glb');
   state = 'mainHub';
 }
 
@@ -738,7 +672,6 @@ function exitToGroupHub() {
   clearGroup(roomGroup);
   roomGroup.visible = false;
   groupHubGroup.visible = true;
-  loadRoomBackground('room.glb');
   state = 'groupHub';
 }
 
@@ -780,26 +713,26 @@ function getLookedRoomLabel() {
   return best;
 }
 
-// ─── BOTÓ WEBXR SUPORT ──────────────────────────────────────────────────
+// ─── BOTÓ WEBXR SUPORT AR ───────────────────────────────────────────────
 const statusEl = document.getElementById('status');
-statusEl.textContent = 'Three.js carregat. Comprovant suport VR...';
+statusEl.textContent = 'Three.js carregat. Comprovant suport AR...';
 
 if (navigator.xr) {
-  navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+  navigator.xr.isSessionSupported('immersive-ar').then(supported => {
     if (supported) {
-      statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó virtual.';
-      document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor', 'bounded-floor'] }));
+      statusEl.textContent = 'Llest. Posa\'t les ulleres i prem el botó "START AR".';
+      document.body.appendChild(ARButton.createButton(renderer, { optionalFeatures: ['local-floor', 'bounded-floor'] }));
     } else {
-      statusEl.textContent = 'VR no suportat. Obre aquest enllaç per HTTPS dins el Meta Quest Browser.';
+      statusEl.textContent = 'AR no suportat en aquest dispositiu/navegador.';
     }
   }).catch(err => {
-    statusEl.textContent = 'Error WebXR: ' + err.message;
+    statusEl.textContent = 'Error WebXR AR: ' + err.message;
   });
 } else {
   statusEl.textContent = 'WebXR absent. Si us plau, utilitza les ulleres Quest 3.';
 }
 
-// ─── CONTROLADORS INPUTS MANDOS VR ────────────────────────────────────
+// ─── CONTROLADORS INPUTS MANDOS AR ────────────────────────────────────
 const infoEl = document.getElementById('controllerInfo');
 
 function handleInput(frame) {
@@ -915,7 +848,6 @@ function animate(time, frame) {
   } else if (state === 'origensRoom') {
     const looked = getLookedOrigensImage();
 
-    // Actualitzem les imatges normals si no hi ha cap animació activa
     for (let i = 0; i < origensImages.length; i++) {
       const item = origensImages[i];
       if (!item.mesh.visible || item.mesh === origensEnlargedMesh) continue;
@@ -924,7 +856,6 @@ function animate(time, frame) {
       item.mesh.scale.setScalar(1 + 0.22 * item.prog);
     }
 
-    // Animació d'ampliar/reduir la imatge directament sobre la mateixa malla
     if (origensEnlargedMesh && origensAnimState && origensEnlargedMesh.userData?.anim) {
       origensAnimProgress += delta / ANIM_DURATION;
       if (origensAnimProgress >= 1) origensAnimProgress = 1;
