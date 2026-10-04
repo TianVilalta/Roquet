@@ -180,14 +180,14 @@ scene.add(dirLight2);
 const ambient = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambient);
 
-// ─── DADES DE LES SECCIONS I IMATGES (COMPROVA SI ELS LOGOS ESTAN A ./ O A ./logos/) ───────────────────
+// ─── DADES DE LES SECCIONS I IMATGES (RUTES A ./logos/) ───────────────────
 const hubItems = [
-  { label: 'Amèrica', color: 0x3a86ff, img: './america.png', id: 'america' },
-  { label: 'Pedro', color: 0xe63946, img: './pedro.png', id: 'pedro' },
-  { label: 'Eastern', color: 0xff8844, img: './eastern.png', id: 'eastern' },
-  { label: 'Dinacil', color: 0xf4a261, img: './dinacil.png', id: 'dinacil' },
-  { label: 'Fundiciones', color: 0x4895ef, img: './fundiciones.png', id: 'fundiciones' },
-  { label: 'Tekor', color: 0x8a6cff, img: './tekor.png', id: 'tekor' }
+  { label: 'Amèrica', img: './logos/america.png', id: 'america' },
+  { label: 'Pedro', img: './logos/pedro.png', id: 'pedro' },
+  { label: 'Eastern', img: './logos/eastern.png', id: 'eastern' },
+  { label: 'Dinacil', img: './logos/dinacil.png', id: 'dinacil' },
+  { label: 'Fundiciones', img: './logos/fundiciones.png', id: 'fundiciones' },
+  { label: 'Tekor', img: './logos/tekor.png', id: 'tekor' }
 ];
 
 const dinacilCategories = {
@@ -259,26 +259,6 @@ function clearGroup(g) {
   }
 }
 
-// Canvas helper per a crear una textura amb text per defecte si falla la imatge
-function createFallbackTexture(text, colorHex) {
-  const c = document.createElement('canvas');
-  c.width = 512; c.height = 256;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#' + colorHex.toString(16).padStart(6, '0');
-  ctx.fillRect(0, 0, c.width, c.height);
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = '#ffffff';
-  ctx.strokeRect(4, 4, c.width - 8, c.height - 8);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 40px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, c.width / 2, c.height / 2);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
 // ─── MAIN HUB ──────────────────────────────────────────────────────────
 const mainHubGroup = new THREE.Group();
 scene.add(mainHubGroup);
@@ -299,7 +279,7 @@ function recenterMainHubAroundUser() {
 
 const mainPanels = [];
 const MAIN_RADIUS = 2.8;
-const IMAGE_Y = 1.1;
+const IMAGE_Y = 1.2;
 
 function createMainHubPanels() {
   clearGroup(mainHubGroup);
@@ -312,18 +292,13 @@ function createMainHubPanels() {
     const z = -Math.cos(angle) * MAIN_RADIUS;
     const item = hubItems[i];
 
-    // Pla inicial visible de color per defecte per si falla la imatge
-    const fallbackTex = createFallbackTexture(item.label, item.color);
-    const mat = new THREE.MeshStandardMaterial({ 
-      map: fallbackTex,
-      side: THREE.DoubleSide, 
+    const mat = new THREE.MeshBasicMaterial({ 
       transparent: true, 
-      roughness: 0.5,
-      metalness: 0.1
+      side: THREE.DoubleSide
     });
 
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), mat);
-    mesh.visible = true;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.1), mat);
+    mesh.visible = false; 
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     mainHubGroup.add(mesh);
@@ -342,10 +317,11 @@ function createMainHubPanels() {
 
         mesh.geometry.dispose();
         mesh.geometry = new THREE.PlaneGeometry(w, h);
+        mesh.visible = true;
       },
       undefined,
       (err) => {
-        console.warn(`No s'ha pogut carregar el logo ${item.img}, s'utilitza el panell per defecte.`, err);
+        console.warn(`Error en carregar la imatge ${item.img}:`, err);
       }
     );
 
@@ -371,23 +347,18 @@ function buildThemeRoom() {
   clearGroup(roomGroup);
   closeCarousel();
   roomLabels.length = 0; 
-  
+
+  camera.getWorldPosition(_cam);
+  roomGroup.position.set(_cam.x, 0, _cam.z);
+
   const labels = ['Edifici', 'Instalacions', 'Producte'];
-  const RL_RADIUS = 2.2;
+  const RL_RADIUS = 2.5;
   const RL_Y = 1.2;
-  
-  camera.getWorldDirection(_fwd);
-  _fwd.y = 0;
-  if (_fwd.lengthSq() === 0) _fwd.set(0, 0, -1);
-  _fwd.normalize();
-  
-  const baseAngle = Math.atan2(_fwd.x, -_fwd.z);
-  const labelAngles = [baseAngle - 0.6, baseAngle, baseAngle + 0.6];
-  
+
   for (let i = 0; i < labels.length; i++) {
-    const ang = labelAngles[i];
-    const lx = Math.sin(ang) * RL_RADIUS;
-    const lz = -Math.cos(ang) * RL_RADIUS;
+    const angle = (i / labels.length) * Math.PI * 2;
+    const lx = Math.sin(angle) * RL_RADIUS;
+    const lz = -Math.cos(angle) * RL_RADIUS;
 
     const lc = document.createElement('canvas'); lc.width = 256; lc.height = 64;
     const lctx = lc.getContext('2d');
@@ -469,6 +440,7 @@ function openCarouselCategory(categoryKey) {
     carouselItems.push(mesh);
   }
 
+  roomGroup.visible = false;
   carouselGroup.visible = true;
   state = 'carousel';
 }
@@ -477,7 +449,10 @@ function closeCarousel() {
   clearGroup(carouselGroup);
   carouselGroup.visible = false;
   carouselItems = [];
-  if (state === 'carousel') state = 'themeRoom';
+  if (state === 'carousel') {
+    roomGroup.visible = true;
+    state = 'themeRoom';
+  }
 }
 
 // ─── NAVEGACIÓ I SORTIDA ───────────────────────────────────────────────
@@ -551,7 +526,6 @@ function handleInput(delta, frame) {
     const aPressed = gp.buttons[4]?.pressed; 
     const bPressed = gp.buttons[5]?.pressed;
 
-    // ROTACIÓ DE LA CÀMERA AMB EL JOYSTICK DRET
     const axisX = gp.axes[2] !== undefined ? gp.axes[2] : gp.axes[0];
     if (axisX !== undefined) {
       const deadzone = 0.15;
@@ -563,7 +537,6 @@ function handleInput(delta, frame) {
       }
     }
 
-    // SELECCIÓ BOTÓ A
     if (aPressed && !buttonStates.a) {
       if (state === 'mainHub') {
         const idx = getLookedMainPanel();
@@ -578,7 +551,6 @@ function handleInput(delta, frame) {
       }
     }
 
-    // BOTÓ B (ENRERE)
     if (bPressed && !buttonStates.b) {
       if (state === 'carousel') {
         closeCarousel();
