@@ -180,7 +180,7 @@ scene.add(dirLight2);
 const ambient = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambient);
 
-// ─── DADES DE LES SECCIONS I IMATGES (TOTS A ARREL) ───────────────────
+// ─── DADES DE LES SECCIONS I IMATGES (COMPROVA SI ELS LOGOS ESTAN A ./ O A ./logos/) ───────────────────
 const hubItems = [
   { label: 'Amèrica', color: 0x3a86ff, img: './america.png', id: 'america' },
   { label: 'Pedro', color: 0xe63946, img: './pedro.png', id: 'pedro' },
@@ -259,6 +259,26 @@ function clearGroup(g) {
   }
 }
 
+// Canvas helper per a crear una textura amb text per defecte si falla la imatge
+function createFallbackTexture(text, colorHex) {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#' + colorHex.toString(16).padStart(6, '0');
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = '#ffffff';
+  ctx.strokeRect(4, 4, c.width - 8, c.height - 8);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 40px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, c.width / 2, c.height / 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 // ─── MAIN HUB ──────────────────────────────────────────────────────────
 const mainHubGroup = new THREE.Group();
 scene.add(mainHubGroup);
@@ -292,22 +312,25 @@ function createMainHubPanels() {
     const z = -Math.cos(angle) * MAIN_RADIUS;
     const item = hubItems[i];
 
+    // Pla inicial visible de color per defecte per si falla la imatge
+    const fallbackTex = createFallbackTexture(item.label, item.color);
     const mat = new THREE.MeshStandardMaterial({ 
+      map: fallbackTex,
       side: THREE.DoubleSide, 
       transparent: true, 
-      alphaTest: 0.1,
       roughness: 0.5,
       metalness: 0.1
     });
 
-    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
-    mesh.visible = false;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), mat);
+    mesh.visible = true;
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     mainHubGroup.add(mesh);
 
-    setTimeout(() => {
-      loader.load(item.img, (tex) => {
+    loader.load(
+      item.img, 
+      (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace;
         mesh.material.map = tex;
         mesh.material.needsUpdate = true;
@@ -319,11 +342,12 @@ function createMainHubPanels() {
 
         mesh.geometry.dispose();
         mesh.geometry = new THREE.PlaneGeometry(w, h);
-        mesh.position.set(x, IMAGE_Y, z);
-        mesh.lookAt(0, IMAGE_Y, 0);
-        mesh.visible = true;
-      });
-    }, i * 50);
+      },
+      undefined,
+      (err) => {
+        console.warn(`No s'ha pogut carregar el logo ${item.img}, s'utilitza el panell per defecte.`, err);
+      }
+    );
 
     mainPanels.push({ mesh, item, index: i, prog: 0 });
   }
@@ -437,8 +461,8 @@ function openCarouselCategory(categoryKey) {
         mesh.geometry = new THREE.PlaneGeometry(w, h);
       },
       undefined,
-      () => {
-        mesh.visible = false;
+      (err) => {
+        console.warn(`Error carregant imatge carrusel: ${imageList[i]}`, err);
       }
     );
 
