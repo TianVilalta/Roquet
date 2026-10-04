@@ -390,6 +390,7 @@ function buildThemeRoom() {
 function openCarouselCategory(categoryKey) {
   clearGroup(carouselGroup);
   carouselItems = [];
+  carouselGroup.rotation.y = 0; // Reset rotació al carregar
 
   const imageList = dinacilCategories[categoryKey] || [];
   if (imageList.length === 0) return;
@@ -505,7 +506,7 @@ if (navigator.xr) {
   });
 }
 
-// ─── INPUTS I JOYSTICK CONTINU (SMOOTH ROTATION) ──────────────────────
+// ─── INPUTS I JOYSTICK CONTINU ─────────────────────────────────────────
 const infoEl = document.getElementById('controllerInfo');
 
 function handleInput(delta, frame) {
@@ -526,6 +527,7 @@ function handleInput(delta, frame) {
     const aPressed = gp.buttons[4]?.pressed; 
     const bPressed = gp.buttons[5]?.pressed;
 
+    // MOVIMENT DEL JOYSTICK DRET
     const axisX = gp.axes[2] !== undefined ? gp.axes[2] : gp.axes[0];
     if (axisX !== undefined) {
       const deadzone = 0.15;
@@ -533,7 +535,14 @@ function handleInput(delta, frame) {
         const sign = Math.sign(axisX);
         const normalizedInput = (Math.abs(axisX) - deadzone) / (1.0 - deadzone);
         const maxTurnSpeed = 1.5; 
-        cameraGroup.rotation.y -= sign * normalizedInput * maxTurnSpeed * delta;
+
+        if (state === 'carousel' && carouselGroup.visible) {
+          // En mode carrusel, girem el conjunt d'imatges
+          carouselGroup.rotation.y -= sign * normalizedInput * maxTurnSpeed * delta;
+        } else {
+          // En la resta d'estats, girem la càmera de l'usuari
+          cameraGroup.rotation.y -= sign * normalizedInput * maxTurnSpeed * delta;
+        }
       }
     }
 
@@ -565,7 +574,7 @@ function handleInput(delta, frame) {
   if(infoEl) infoEl.textContent = anyController ? 'Mandos actius' : 'Mandos: buscant...';
 }
 
-// ─── BUCLE D'ANIMACIÓ I ROTACIÓ CONTINUA DEL CARRUSEL ────────────────
+// ─── BUCLE D'ANIMACIÓ ──────────────────────────────────────────────────
 let lastClockTime = performance.now();
 
 function animate(time, frame) {
@@ -579,10 +588,6 @@ function animate(time, frame) {
   }
 
   camera.getWorldPosition(_camPos2D);
-
-  if (state === 'carousel' && carouselGroup.visible) {
-    carouselGroup.rotation.y += delta * 0.08;
-  }
 
   if (state === 'mainHub') {
     const looked = getLookedMainPanel();
