@@ -76,6 +76,7 @@ const _fwd = new THREE.Vector3();
 const _cam = new THREE.Vector3();
 const _to  = new THREE.Vector3();
 const _camPos2D = new THREE.Vector3();
+const _itemWorldPos = new THREE.Vector3();
 
 // ─── RENDERITZADOR I ESCENA ───────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ 
@@ -390,7 +391,7 @@ function buildThemeRoom() {
 function openCarouselCategory(categoryKey) {
   clearGroup(carouselGroup);
   carouselItems = [];
-  carouselGroup.rotation.y = 0; // Reset rotació al carregar
+  carouselGroup.rotation.y = 0; 
 
   const imageList = dinacilCategories[categoryKey] || [];
   if (imageList.length === 0) return;
@@ -403,8 +404,11 @@ function openCarouselCategory(categoryKey) {
 
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2;
-    const x = Math.sin(angle) * CAROUSEL_RADIUS;
-    const z = -Math.cos(angle) * CAROUSEL_RADIUS;
+    const basePos = new THREE.Vector3(
+      Math.sin(angle) * CAROUSEL_RADIUS,
+      1.2,
+      -Math.cos(angle) * CAROUSEL_RADIUS
+    );
 
     const mat = new THREE.MeshBasicMaterial({ 
       side: THREE.DoubleSide, 
@@ -413,7 +417,7 @@ function openCarouselCategory(categoryKey) {
     });
 
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-    mesh.position.set(x, 1.2, z);
+    mesh.position.copy(basePos);
     mesh.lookAt(0, 1.2, 0);
     carouselGroup.add(mesh);
 
@@ -438,7 +442,11 @@ function openCarouselCategory(categoryKey) {
       }
     );
 
-    carouselItems.push(mesh);
+    carouselItems.push({
+      mesh,
+      basePos: basePos.clone(),
+      prog: 0
+    });
   }
 
   roomGroup.visible = false;
@@ -491,6 +499,19 @@ function getLookedRoomLabel() {
   return best;
 }
 
+function getLookedCarouselItem() {
+  camera.getWorldDirection(_fwd);
+  camera.getWorldPosition(_cam);
+  let best = -1, bestDot = 0.8;
+  for (let i = 0; i < carouselItems.length; i++) {
+    carouselItems[i].mesh.getWorldPosition(_itemWorldPos);
+    _to.copy(_itemWorldPos).sub(_cam).normalize();
+    const d = _fwd.dot(_to);
+    if (d > bestDot) { bestDot = d; best = i; }
+  }
+  return best;
+}
+
 // ─── BOTÓ WEBXR AR ─────────────────────────────────────────────────────
 const statusEl = document.getElementById('status');
 statusEl.textContent = 'Comprovant WebXR AR...';
@@ -537,10 +558,8 @@ function handleInput(delta, frame) {
         const maxTurnSpeed = 1.5; 
 
         if (state === 'carousel' && carouselGroup.visible) {
-          // En mode carrusel, girem el conjunt d'imatges
           carouselGroup.rotation.y -= sign * normalizedInput * maxTurnSpeed * delta;
         } else {
-          // En la resta d'estats, girem la càmera de l'usuari
           cameraGroup.rotation.y -= sign * normalizedInput * maxTurnSpeed * delta;
         }
       }
@@ -610,6 +629,22 @@ function animate(time, frame) {
       r.mesh.scale.setScalar(1 + 0.25 * r.prog);
       r.mesh.material.opacity = 0.5 + 0.5 * r.prog;
       r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
+    }
+  } else if (state === 'carousel' && carouselGroup.visible) {
+    const lookedIdx = getLookedCarouselItem();
+    for (let i = 0; i < carouselItems.length; i++) {
+      const item = carouselItems[i];
+      const target = (i === lookedIdx) ? 1 : 0;
+      
+      item.prog += (target - item.prog) * 0.12;
+
+      // S'escala un 25% més gran
+      item.mesh.scale.setScalar(1 + 0.25 * item.prog);
+
+      // S'apropa 0.6 unitats cap al centre (cap a l'usuari)
+      const moveDir = item.basePos.clone().normalize();
+      const targetPos = item.basePos.clone().sub(moveDir.multiplyScalar(0.6 * item.prog));
+      item.mesh.position.copy(targetPos);
     }
   }
 
