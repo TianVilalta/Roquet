@@ -95,8 +95,12 @@ renderer.xr.setReferenceSpaceType('local-floor');
 const scene = new THREE.Scene();
 scene.background = null; // Fons nul per veure l'entorn real
 
+// Contenidor per al control de la rotació de la càmera mitjançant joystick
+const cameraGroup = new THREE.Group();
+scene.add(cameraGroup);
+
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 300);
-scene.add(camera);
+cameraGroup.add(camera);
 
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -236,7 +240,7 @@ function recenterMainHubAroundUser() {
 const mainPanels = [];
 const MAIN_RADIUS = 2.8;
 const IMAGE_Y = 1.1;
-const IMAGE_WIDTH = 1.2;
+const IMAGE_WIDTH = 1.8; // Augmentat de 1.2 a 1.8 per fer les imatges més grans
 
 function createMainHubPanels() {
   clearGroup(mainHubGroup);
@@ -479,10 +483,11 @@ if (navigator.xr) {
   statusEl.textContent = 'WebXR absent. Si us plau, utilitza les ulleres Quest 3.';
 }
 
-// ─── CONTROLADORS INPUTS MANDOS AR ────────────────────────────────────
+// ─── CONTROLADORS INPUTS MANDOS AR I JOYSTICK ─────────────────────────
 const infoEl = document.getElementById('controllerInfo');
+let joystickTurnCooldown = false;
 
-function handleInput(frame) {
+function handleInput(delta, frame) {
   const session = renderer.xr.getSession(); if (!session) return;
   const refSpace = renderer.xr.getReferenceSpace(); let infoText = 'Posició dels mandos:\n'; let anyController = false;
 
@@ -499,6 +504,21 @@ function handleInput(frame) {
     const gp = src.gamepad; 
     const aPressed = gp.buttons[4]?.pressed; 
     const bPressed = gp.buttons[5]?.pressed;
+
+    // ROTACIÓ LATERAL AMB EL JOYSTICK DRET (Eix X de l'stick)
+    const axisX = gp.axes[2] !== undefined ? gp.axes[2] : gp.axes[0];
+    if (axisX !== undefined) {
+      const threshold = 0.5;
+      if (Math.abs(axisX) > threshold) {
+        if (!joystickTurnCooldown) {
+          const turnAngle = Math.sign(axisX) * (Math.PI / 6); // Gira 30 graus en la direcció indicada
+          cameraGroup.rotation.y -= turnAngle; // Rotació nomes en l'eix lateral (Y)
+          joystickTurnCooldown = true;
+        }
+      } else {
+        joystickTurnCooldown = false;
+      }
+    }
 
     // BOTÓ A (Selecció de la imatge que s'està mirant)
     if (aPressed && !buttonStates.a) {
@@ -579,7 +599,7 @@ function animate(time, frame) {
     }
   }
 
-  handleInput(frame);
+  handleInput(delta, frame);
   renderer.render(scene, camera);
 }
 
