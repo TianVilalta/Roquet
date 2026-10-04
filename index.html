@@ -9,7 +9,7 @@
     margin: 0; padding: 0;
     width: 100%; height: 100%;
     overflow: hidden;
-    background: transparent; /* Permet veure el fons si s'utilitza navegador */
+    background: transparent;
     font-family: Arial, sans-serif;
     color: white;
   }
@@ -72,28 +72,16 @@ let state = 'mainHub';
 const buttonStates = {};
 let roomWindow = null;  
 const roomLabels = [];
-const origensImages = [];
-
-// Variables per l'animació d'ampliació d'imatges
-let origensEnlargedMesh = null;
-let origensAnimState = null; // 'opening' | 'closing' | null
-let origensAnimProgress = 0; // 0 a 1
-const ANIM_DURATION = 0.5; // Segons
 
 const _fwd = new THREE.Vector3();
 const _cam = new THREE.Vector3();
 const _to  = new THREE.Vector3();
 const _camPos2D = new THREE.Vector3();
 
-// Funció d'interpolació suau (Ease-In-Out Smoothstep)
-function smoothstep(t) {
-  return t * t * (3 - 2 * t);
-}
-
-// ─── RENDERITZADOR I LLUMS (CONFIGURAT PER A AR) ────────────────────
+// ─── RENDERITZADOR I LLUMS (PASSTHROUGH AR) ───────────────────────────
 const renderer = new THREE.WebGLRenderer({ 
   antialias: true, 
-  alpha: true, // Permet la transparència del fons per a Passthrough AR
+  alpha: true, // Fons transparent per Passthrough AR
   powerPreference: "high-performance" 
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -105,7 +93,7 @@ renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 
 const scene = new THREE.Scene();
-scene.background = null; // Fons nul per mostrar el món real (Passthrough)
+scene.background = null; // Fons nul per veure l'entorn real
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 300);
 scene.add(camera);
@@ -194,29 +182,20 @@ scene.add(dirLight2);
 const ambient = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambient);
 
-// ─── DADES DE LES SECCIONS PRINCIPALS ────────────────────────────────
-const mainSections = [
-  { id: 'origens', label: 'Els orígens', isGroup: false },
-  { id: 'creixement', label: 'El creixement', isGroup: false },
-  { id: 'grup', label: "El Grup ROQUET", isGroup: true },
-  { id: 'impacte', label: "L'impacte", isGroup: false },
-  { id: 'futur', label: 'El futur', isGroup: false }
-];
-
-// ─── DADES DE LES UBICACIONS DE "EL GRUP ROQUET" ──────────────────────
-const groupThemes = [
-  { label: 'Ubicació 1', color: 0xe63946, img: 'pedro.png', id: 'pedro',
-    text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo' },
-  { label: 'Ubicació 2', color: 0x2dc653, img: 'hydraulics.png', id: 'hydraulics',
-    text: 'Ubicada en Tona, a 50km al norte de Barcelona, aqui es donde se fabrican los distribuidores hidraulicos.' },
-  { label: 'Ubicació 3', color: 0x4895ef, img: 'fundiciones.png', id: 'fundiciones',
-    text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos, tanto de aluminio como de fundición' },
-  { label: 'Ubicació 4', color: 0xf4a261, img: 'dinacil.png', id: 'dinacil',
+// ─── DADES DE LES 6 IMATGES (RUTES CARPETA /logos/) ───────────────────
+const hubItems = [
+  { label: 'Amèrica', color: 0x3a86ff, img: './logos/america.png', id: 'america',
+    text: 'Divisió d\'atenció i distribució del grup al continent americà.' },
+  { label: 'Pedro', color: 0xe63946, img: './logos/pedro.png', id: 'pedro',
+    text: 'Ubicada en Tona, a 50km al norte de Barcelona, ofrece las funciones corporativas para todo el grupo.' },
+  { label: 'Eastern', color: 0xff8844, img: './logos/eastern.png', id: 'eastern',
+    text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos y grandes.' },
+  { label: 'Dinacil', color: 0xf4a261, img: './logos/dinacil.png', id: 'dinacil',
     text: 'Ubicada en Centelles a 40 km al norte de Barcelona. Producción automatizada de cilindros hidráulicos pequeños.' },
-  { label: 'Ubicació 5', color: 0xff8844, img: 'eastern.png', id: 'eastern',
-    text: 'Inaugurada en 2015 en Ploiesti (Rumanía) a 60km de Bucarest. Fabricación de cilindros hidráulicos medianos i grandes.' },
-  { label: 'Ubicació 6', color: 0x8a6cff, img: 'tekor.png', id: 'tekor',
-    text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris y nodular / SG / fundición dúctil.' },
+  { label: 'Fundiciones', color: 0x4895ef, img: './logos/fundiciones.png', id: 'fundiciones',
+    text: 'Ubicada en Vic a 60 km al norte de Barcelona. Especializada en la producción de bombas y motores hidráulicos.' },
+  { label: 'Tekor', color: 0x8a6cff, img: './logos/tekor.png', id: 'tekor',
+    text: 'Ubicada en Roda de Ter, a 65 km al norte de Barcelona. Fundición especializada en piezas de fundición gris i nodular.' }
 ];
 
 // ─── HELPER NETEJA GRUPS AMB ALLIBERAMENT DE VRAM ────────────────────
@@ -236,7 +215,7 @@ function clearGroup(g, preserveKey = '') {
   }
 }
 
-// ─── 1. SALA PRINCIPAL (MAIN HUB: 5 SECCIONS) ──────────────────────────
+// ─── 1. SALA INICIAL (MAIN HUB AMB LES 6 IMATGES EN CERCLE) ───────────
 const mainHubGroup = new THREE.Group();
 scene.add(mainHubGroup);
 
@@ -256,79 +235,22 @@ function recenterMainHubAroundUser() {
 
 const mainPanels = [];
 const MAIN_RADIUS = 2.8;
-const MAIN_Y = 1.1;
+const IMAGE_Y = 1.1;
+const IMAGE_WIDTH = 1.2;
 
 function createMainHubPanels() {
   clearGroup(mainHubGroup);
   mainPanels.length = 0;
 
-  for (let i = 0; i < mainSections.length; i++) {
-    const angle = (i / mainSections.length) * Math.PI * 2;
-    const x = Math.sin(angle) * MAIN_RADIUS;
-    const z = -Math.cos(angle) * MAIN_RADIUS;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 512; canvas.height = 180;
-    const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = 'rgba(15, 17, 21, 0.85)'; // Fons semi-transparent per integrar-se en AR
-    ctx.beginPath();
-    ctx.roundRect(8, 8, 512 - 16, 180 - 16, 20);
-    ctx.fill();
-
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 6;
-    ctx.stroke();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 32px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(mainSections[i].label, 512 / 2, 180 / 2);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.generateMipmaps = true;
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.56), mat);
-
-    mesh.position.set(x, MAIN_Y, z);
-    mesh.lookAt(0, MAIN_Y, 0);
-
-    mainHubGroup.add(mesh);
-    mainPanels.push({ mesh, section: mainSections[i], index: i, prog: 0 });
-  }
-}
-
-createMainHubPanels();
-
-// ─── 2. SUB-HUB: EL GRUP ROQUET ────────────────────────────────────────
-const groupHubGroup = new THREE.Group();
-groupHubGroup.visible = false;
-scene.add(groupHubGroup);
-
-const groupCubes = [];
-const IMAGE_WIDTH = 1.2;
-const IMAGE_Y = 1.0;
-const HOVER_SCALE = 1.18;
-
-function buildGroupHub() {
-  clearGroup(groupHubGroup);
-  groupCubes.length = 0;
-
-  camera.getWorldPosition(_cam);
-  groupHubGroup.position.set(_cam.x, 0, _cam.z);
-
   const loader = new THREE.TextureLoader();
 
-  for (let i = 0; i < groupThemes.length; i++) {
-    const angle = (i / groupThemes.length) * Math.PI * 2;
+  for (let i = 0; i < hubItems.length; i++) {
+    const angle = (i / hubItems.length) * Math.PI * 2;
     const x = Math.sin(angle) * MAIN_RADIUS;
     const z = -Math.cos(angle) * MAIN_RADIUS;
-    const theme = groupThemes[i];
+    const item = hubItems[i];
 
-    const pngMaterial = new THREE.MeshStandardMaterial({ 
+    const mat = new THREE.MeshStandardMaterial({ 
       side: THREE.DoubleSide, 
       transparent: true, 
       alphaTest: 0.1,
@@ -336,173 +258,49 @@ function buildGroupHub() {
       metalness: 0.1
     });
 
-    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), pngMaterial);
-    mesh.visible = false; 
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+    mesh.visible = false;
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
-    groupHubGroup.add(mesh);
+    mainHubGroup.add(mesh);
 
     setTimeout(() => {
-      loader.load(theme.img, (texLoaded) => {
-        texLoaded.colorSpace = THREE.SRGBColorSpace;
-        texLoaded.generateMipmaps = true;
-        texLoaded.minFilter = THREE.LinearMipmapLinearFilter;
-        
-        mesh.material.map = texLoaded;
-        mesh.material.needsUpdate = true;
+      loader.load(
+        item.img, 
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.generateMipmaps = true;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          
+          mesh.material.map = tex;
+          mesh.material.needsUpdate = true;
 
-        const iw = texLoaded.image?.naturalWidth || texLoaded.image?.width || 512;
-        const ih = texLoaded.image?.naturalHeight || texLoaded.image?.height || 512;
-        const w = IMAGE_WIDTH * 0.5; 
-        const h = w * (ih / iw);
+          const iw = tex.image?.naturalWidth || 512;
+          const ih = tex.image?.naturalHeight || 512;
+          const w = IMAGE_WIDTH * 0.5;
+          const h = w * (ih / iw);
 
-        mesh.geometry.dispose();
-        mesh.geometry = new THREE.PlaneGeometry(w, h);
-        mesh.position.set(x, IMAGE_Y, z);
-        mesh.lookAt(0, IMAGE_Y, 0);
+          mesh.geometry.dispose();
+          mesh.geometry = new THREE.PlaneGeometry(w, h);
+          mesh.position.set(x, IMAGE_Y, z);
+          mesh.lookAt(0, IMAGE_Y, 0);
 
-        mesh.visible = true; 
-      });
-    }, i * 60);
+          mesh.visible = true;
+        },
+        undefined,
+        (err) => {
+          console.error(`Error carregant la imatge: ${item.img}`, err);
+        }
+      );
+    }, i * 50);
 
-    groupCubes.push({ mesh, index: i, prog: 0 });
+    mainPanels.push({ mesh, item, index: i, prog: 0 });
   }
 }
 
-// ─── 3. SALA "ELS ORÍGENS" (ANIMACIÓ DIRECTA RECTA) ────────────────────
-const origensGroup = new THREE.Group();
-origensGroup.visible = false;
-scene.add(origensGroup);
+createMainHubPanels();
 
-function buildOrigensRoom() {
-  clearGroup(origensGroup);
-  origensImages.length = 0;
-  closeEnlargedOrigensImageImmediate();
-
-  camera.getWorldPosition(_cam);
-  origensGroup.position.set(_cam.x, 0, _cam.z);
-
-  const loader = new THREE.TextureLoader();
-  const count = 7;
-  const radius = 2.6;
-
-  for (let i = 1; i <= count; i++) {
-    const angle = ((i - 1) / count) * Math.PI * 2;
-    const x = Math.sin(angle) * radius;
-    const z = -Math.cos(angle) * radius;
-    const imgPath = `./ElsOrígens/h${i}.png`;
-
-    const mat = new THREE.MeshStandardMaterial({
-      side: THREE.DoubleSide,
-      transparent: true,
-      alphaTest: 0.1,
-      roughness: 0.4,
-      metalness: 0.1
-    });
-
-    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
-    mesh.visible = false; 
-    mesh.position.set(x, IMAGE_Y, z);
-    mesh.lookAt(0, IMAGE_Y, 0);
-    origensGroup.add(mesh);
-
-    loader.load(
-      imgPath,
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.generateMipmaps = true;
-        tex.minFilter = THREE.LinearMipmapLinearFilter;
-
-        mesh.material.map = tex;
-        mesh.material.needsUpdate = true;
-
-        const iw = tex.image?.naturalWidth || 512;
-        const ih = tex.image?.naturalHeight || 512;
-        const w = 1.0;
-        const h = w * (ih / iw);
-
-        mesh.geometry.dispose();
-        mesh.geometry = new THREE.PlaneGeometry(w, h);
-        mesh.position.set(x, IMAGE_Y, z);
-        mesh.lookAt(0, IMAGE_Y, 0);
-
-        mesh.visible = true;
-      },
-      undefined,
-      (err) => {
-        console.error(`Error de la imatge: No s'ha trobat ${imgPath}.`, err);
-      }
-    );
-
-    origensImages.push({ mesh, index: i - 1, prog: 0, path: imgPath });
-  }
-
-  mainHubGroup.visible = false;
-  groupHubGroup.visible = false;
-  roomGroup.visible = false;
-  origensGroup.visible = true;
-  state = 'origensRoom';
-}
-
-function openEnlargedOrigensImage(idx) {
-  if (origensAnimState !== null) return; 
-
-  const item = origensImages[idx];
-  if (!item || !item.mesh || !item.mesh.visible) return;
-
-  const mesh = item.mesh;
-
-  const startPos = mesh.position.clone();
-  const startScale = mesh.scale.clone();
-
-  // Apropar la imatge en línia recta cap al centre
-  const endPos = startPos.clone().multiplyScalar(0.45);
-  endPos.y = IMAGE_Y;
-
-  const endScale = new THREE.Vector3(1.3, 1.3, 1.3);
-
-  mesh.userData.anim = { startPos, endPos, startScale, endScale };
-
-  origensEnlargedMesh = mesh;
-  origensAnimProgress = 0;
-  origensAnimState = 'opening';
-}
-
-function closeEnlargedOrigensImage() {
-  if (!origensEnlargedMesh || origensAnimState !== null) return;
-  origensAnimProgress = 0;
-  origensAnimState = 'closing';
-}
-
-function closeEnlargedOrigensImageImmediate() {
-  if (origensEnlargedMesh) {
-    if (origensEnlargedMesh.userData?.anim) {
-      const { startPos, startScale } = origensEnlargedMesh.userData.anim;
-      origensEnlargedMesh.position.copy(startPos);
-      origensEnlargedMesh.scale.copy(startScale);
-      delete origensEnlargedMesh.userData.anim;
-    }
-    origensEnlargedMesh = null;
-  }
-  origensAnimState = null;
-  origensAnimProgress = 0;
-}
-
-function getLookedOrigensImage() {
-  if (origensEnlargedMesh) return -1;
-  camera.getWorldDirection(_fwd);
-  camera.getWorldPosition(_cam);
-  let best = -1, bestDot = 0.75;
-  for (let i = 0; i < origensImages.length; i++) {
-    if (!origensImages[i].mesh.visible) continue;
-    _to.copy(origensImages[i].mesh.position).sub(_cam).normalize();
-    const d = _fwd.dot(_to);
-    if (d > bestDot) { bestDot = d; best = i; }
-  }
-  return best;
-}
-
-// ─── 4. SALA INTERIOR DE TEMES / UBICACIONS ────────────────────────────
+// ─── 2. SALA INTERIOR / TEMÀTICA (FONS TRANSPARENT) ───────────────────
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
@@ -515,7 +313,7 @@ function makeRoomTextPanelCanvas(theme) {
   canvas.width = S; canvas.height = S;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.fillStyle = 'rgba(15, 17, 21, 0.85)';
   ctx.beginPath();
   ctx.roundRect(10, 10, S - 20, S - 20, 20);
   ctx.fill();
@@ -525,13 +323,13 @@ function makeRoomTextPanelCanvas(theme) {
   ctx.lineWidth = 8;
   ctx.stroke();
 
-  ctx.fillStyle = '#111111';
+  ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 28px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillText(theme.label.toUpperCase(), S/2, 40);
 
-  ctx.fillStyle = '#222222';
+  ctx.fillStyle = '#dddddd';
   ctx.font = '22px Arial';
   function wrapText(context, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
@@ -551,21 +349,12 @@ function makeRoomTextPanelCanvas(theme) {
   return canvas;
 }
 
-function buildEmptyRoom() {
-  clearGroup(roomGroup);
-  state = 'emptyRoom';
-  mainHubGroup.visible = false;
-  groupHubGroup.visible = false;
-  origensGroup.visible = false;
-  roomGroup.visible = true;
-}
-
 function buildThemeRoom(themeIndex) {
   clearGroup(roomGroup);
   currentActiveThemeIndex = themeIndex;
 
   roomLabels.length = 0; 
-  const labels = ['Historia', 'Productes', 'Grup'];
+  const labels = ['Història', 'Productes', 'Informació'];
   const RL_RADIUS = 2.4;
   const RL_Y = 1.2;
   const dir = new THREE.Vector3();
@@ -585,9 +374,10 @@ function buildThemeRoom(themeIndex) {
     const lctx = lc.getContext('2d');
     lctx.clearRect(0,0,lc.width,lc.height);
     lctx.beginPath(); lctx.roundRect(4,4,248,56,12); lctx.closePath();
-    lctx.fillStyle = 'rgba(255,255,255,0.98)'; lctx.fill();
-    lctx.fillStyle = '#111111'; lctx.font = 'bold 28px Arial'; lctx.textAlign = 'center';
-    lctx.fillText(labels[i], lc.width/2, lc.height/2 + 4);
+    lctx.fillStyle = 'rgba(15, 17, 21, 0.85)'; lctx.fill();
+    lctx.strokeStyle = '#ffffff'; lctx.lineWidth = 3; lctx.stroke();
+    lctx.fillStyle = '#ffffff'; lctx.font = 'bold 24px Arial'; lctx.textAlign = 'center';
+    lctx.fillText(labels[i], lc.width/2, lc.height/2 + 8);
 
     const ltex = new THREE.CanvasTexture(lc);
     ltex.generateMipmaps = true;
@@ -600,8 +390,6 @@ function buildThemeRoom(themeIndex) {
   }
 
   mainHubGroup.visible = false;
-  groupHubGroup.visible = false;
-  origensGroup.visible = false;
   roomGroup.visible = true;
   state = 'themeRoom';
 }
@@ -620,29 +408,12 @@ function openLabelWindow(ridx) {
   const info = roomLabels[ridx];
   if (!info) return;
   const p = info.mesh.position.clone();
-  const theme = groupThemes[currentActiveThemeIndex];
+  const theme = hubItems[currentActiveThemeIndex];
 
-  let mesh;
-
-  if (theme && theme.id === 'hydraulics') {
-    const cw = 512, ch = 256;
-    const c = document.createElement('canvas'); c.width = cw; c.height = ch;
-    const ctx = c.getContext('2d');
-    ctx.clearRect(0,0,cw,ch);
-    ctx.beginPath(); ctx.roundRect(8,8,cw-16,ch-16,16); ctx.closePath();
-    ctx.fillStyle='rgba(255,255,255,0.98)'; ctx.fill();
-    ctx.fillStyle = '#111111'; ctx.font = 'bold 32px Arial'; ctx.textAlign='center'; 
-    ctx.fillText(info.text, cw/2, ch/2);
-    
-    const tex = new THREE.CanvasTexture(c);
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
-    mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.8), mat);
-  } else {
-    const textCanvas = makeRoomTextPanelCanvas(theme);
-    const tex = new THREE.CanvasTexture(textCanvas);
-    const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: true });
-    mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), mat);
-  }
+  const textCanvas = makeRoomTextPanelCanvas(theme);
+  const tex = new THREE.CanvasTexture(textCanvas);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: true });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), mat);
   
   camera.getWorldPosition(_cam); 
   const dir = _cam.clone().sub(p).normalize(); 
@@ -658,43 +429,19 @@ function openLabelWindow(ridx) {
 // ─── LÒGICA DE DEVOLUCIÓ/SORTIDA (BOTÓ B) ──────────────────────────────
 function exitToMainHub() {
   clearGroup(roomGroup);
-  clearGroup(groupHubGroup);
-  clearGroup(origensGroup);
-  closeEnlargedOrigensImageImmediate();
   roomGroup.visible = false;
-  groupHubGroup.visible = false;
-  origensGroup.visible = false;
   mainHubGroup.visible = true;
   state = 'mainHub';
 }
 
-function exitToGroupHub() {
-  clearGroup(roomGroup);
-  roomGroup.visible = false;
-  groupHubGroup.visible = true;
-  state = 'groupHub';
-}
-
-// ─── RAYCASTING I DETECCIÓ DE MIRADA ─────────────────────────────────
+// ─── DETECCIÓ DE MIRADA (LOOK-AT RAYCASTING) ───────────────────────────
 function getLookedMainPanel() {
   camera.getWorldDirection(_fwd);
   camera.getWorldPosition(_cam);
   let best = -1, bestDot = 0.72;
   for (let i = 0; i < mainPanels.length; i++) {
+    if (!mainPanels[i].mesh.visible) continue;
     _to.copy(mainPanels[i].mesh.position).sub(_cam).normalize();
-    const d = _fwd.dot(_to);
-    if (d > bestDot) { bestDot = d; best = i; }
-  }
-  return best;
-}
-
-function getLookedGroupCube() {
-  camera.getWorldDirection(_fwd);
-  camera.getWorldPosition(_cam);
-  let best = -1, bestDot = 0.72;
-  for (let i = 0; i < groupCubes.length; i++) {
-    if (!groupCubes[i].mesh.visible) continue;
-    _to.copy(groupCubes[i].mesh.position).sub(_cam).normalize();
     const d = _fwd.dot(_to);
     if (d > bestDot) { bestDot = d; best = i; }
   }
@@ -753,30 +500,10 @@ function handleInput(frame) {
     const aPressed = gp.buttons[4]?.pressed; 
     const bPressed = gp.buttons[5]?.pressed;
 
-    // BOTÓ A (Selecció)
+    // BOTÓ A (Selecció de la imatge que s'està mirant)
     if (aPressed && !buttonStates.a) {
       if (state === 'mainHub') {
         const idx = getLookedMainPanel();
-        if (idx !== -1) {
-          const sec = mainSections[idx];
-          if (sec.id === 'origens') {
-            buildOrigensRoom();
-          } else if (sec.isGroup) {
-            buildGroupHub();
-            mainHubGroup.visible = false;
-            groupHubGroup.visible = true;
-            state = 'groupHub';
-          } else {
-            buildEmptyRoom();
-          }
-        }
-      } else if (state === 'origensRoom') {
-        const idx = getLookedOrigensImage();
-        if (idx !== -1) {
-          openEnlargedOrigensImage(idx);
-        }
-      } else if (state === 'groupHub') {
-        const idx = getLookedGroupCube();
         if (idx !== -1) {
           buildThemeRoom(idx);
         }
@@ -788,15 +515,7 @@ function handleInput(frame) {
 
     // BOTÓ B (Tornar enrere)
     if (bPressed && !buttonStates.b) {
-      if (state === 'origensRoom') {
-        if (origensEnlargedMesh) {
-          closeEnlargedOrigensImage();
-        } else {
-          exitToMainHub();
-        }
-      } else if (state === 'groupHub' || state === 'emptyRoom') {
-        exitToMainHub();
-      } else if (state === 'themeRoom') {
+      if (state === 'themeRoom') {
         if (roomWindow) {
           roomGroup.remove(roomWindow); roomWindow.geometry?.dispose(); 
           (Array.isArray(roomWindow.material)?roomWindow.material:[roomWindow.material]).forEach(m=> {
@@ -805,7 +524,7 @@ function handleInput(frame) {
           }); 
           roomWindow = null;
         } else {
-          exitToGroupHub();
+          exitToMainHub();
         }
       }
     }
@@ -840,54 +559,13 @@ function animate(time, frame) {
     const looked = getLookedMainPanel();
     for (let i = 0; i < mainPanels.length; i++) {
       const p = mainPanels[i];
+      if (!p.mesh.visible) continue;
       const target = (i === looked) ? 1 : 0;
       p.prog += (target - p.prog) * 0.12;
       p.mesh.scale.setScalar(1 + 0.18 * p.prog);
-      p.mesh.lookAt(_camPos2D.x, p.mesh.position.y, _camPos2D.z);
-    }
-  } else if (state === 'origensRoom') {
-    const looked = getLookedOrigensImage();
-
-    for (let i = 0; i < origensImages.length; i++) {
-      const item = origensImages[i];
-      if (!item.mesh.visible || item.mesh === origensEnlargedMesh) continue;
-      const target = (i === looked) ? 1 : 0;
-      item.prog += (target - item.prog) * 0.12;
-      item.mesh.scale.setScalar(1 + 0.22 * item.prog);
-    }
-
-    if (origensEnlargedMesh && origensAnimState && origensEnlargedMesh.userData?.anim) {
-      origensAnimProgress += delta / ANIM_DURATION;
-      if (origensAnimProgress >= 1) origensAnimProgress = 1;
-
-      const t = smoothstep(origensAnimProgress);
-      const { startPos, endPos, startScale, endScale } = origensEnlargedMesh.userData.anim;
-
-      if (origensAnimState === 'opening') {
-        origensEnlargedMesh.position.lerpVectors(startPos, endPos, t);
-        origensEnlargedMesh.scale.lerpVectors(startScale, endScale, t);
-
-        if (origensAnimProgress >= 1) origensAnimState = null;
-      } else if (origensAnimState === 'closing') {
-        origensEnlargedMesh.position.lerpVectors(endPos, startPos, t);
-        origensEnlargedMesh.scale.lerpVectors(endScale, startScale, t);
-
-        if (origensAnimProgress >= 1) {
-          closeEnlargedOrigensImageImmediate();
-        }
-      }
-    }
-  } else if (state === 'groupHub') {
-    const looked = getLookedGroupCube();
-    for (let i = 0; i < groupCubes.length; i++) {
-      const c = groupCubes[i]; 
-      if (!c.mesh.visible) continue;
-      const target = (i === looked) ? 1 : 0; 
-      c.prog += (target - c.prog) * 0.12;
-      c.mesh.scale.setScalar(1 + (HOVER_SCALE - 1) * c.prog);
       const camPos3 = new THREE.Vector3(); 
       camera.getWorldPosition(camPos3); 
-      c.mesh.lookAt(camPos3.x, camPos3.y - 0.25, camPos3.z);
+      p.mesh.lookAt(camPos3.x, camPos3.y - 0.1, camPos3.z);
     }
   } else if (state === 'themeRoom') {
     const looked = roomWindow ? -1 : getLookedRoomLabel();
@@ -909,7 +587,7 @@ renderer.setAnimationLoop((time, frame) => { animate(time, frame); });
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+  camera.updateMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
