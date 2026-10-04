@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Roquet AR - Fundiciones Gallery</title>
+<title>Roquet AR - Multi-Room Gallery</title>
 <style>
   html, body {
     margin: 0; padding: 0;
@@ -38,7 +38,7 @@
 </head>
 <body>
 <div id="overlay">
-  <h2>Fundiciones AR — Quest 3</h2>
+  <h2>Grup ROQUET AR — Quest 3</h2>
   <div id="status">Carregant...</div>
 </div>
 <div id="controllerInfo">Mandos: esperant sessió AR...</div>
@@ -69,6 +69,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ─── ESTATS DE NAVEGACIÓ ──────────────────────────────────────────────
 let state = 'mainHub';  
+let currentSelectedCompany = null; // Guarda l'empresa activa (dinacil, fundiciones, america...)
+
 const buttonStates = {};
 const roomLabels = [];
 
@@ -181,7 +183,7 @@ scene.add(dirLight2);
 const ambient = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambient);
 
-// ─── DADES DE LES SECCIONS I IMATGES (RUTES A ./logos/) ───────────────────
+// ─── DADES DE LES SECCIONS I IMATGES ──────────────────────────────────
 const hubItems = [
   { label: 'Amèrica', img: './logos/america.png', id: 'america' },
   { label: 'Pedro', img: './logos/pedro.png', id: 'pedro' },
@@ -191,47 +193,64 @@ const hubItems = [
   { label: 'Tekor', img: './logos/tekor.png', id: 'tekor' }
 ];
 
-const fundicionesCategories = {
-  Edifici: [
-    './FEdifici1.jpg',
-    './FEdifici2.jpg',
-    './FEdifici3.jpg',
-    './FEdifici4.jpg',
-    './FEdifici5.jpg',
-    './FEdifici6.jpg',
-    './FEdifici7.jpg'
-  ],
-  Instalacions: [
-    './FInstalacions1.jpg',
-    './FInstalacions2.jpg',
-    './FInstalacions3.jpg',
-    './FInstalacions4.jpg',
-    './FInstalacions5.jpg',
-    './FInstalacions6.jpg',
-    './FInstalacions7.jpg',
-    './FInstalacions8.jpg',
-    './FInstalacions9.jpg',
-    './FInstalacions10.jpg',
-    './FInstalacions11.jpg',
-    './FInstalacions12.jpg',
-    './FInstalacions13.jpg',
-    './FInstalacions14.jpg',
-    './FInstalacions15.jpg',
-    './FInstalacions16.jpg',
-    './FInstalacions17.jpg',
-    './FInstalacions18.jpg'
-  ],
-  Producte: [
-    './FProducte1.jpg',
-    './FProducte2.jpg',
-    './FProducte3.jpg',
-    './FProducte4.jpg',
-    './FProducte5.jpg',
-    './FProducte6.jpg',
-    './FProducte7.jpg',
-    './FProducte8.jpg',
-    './FProducte9.jpg'
-  ]
+const companyGalleries = {
+  dinacil: {
+    Edifici: [
+      './DEdifici1.jpg', './DEdifici2.jpg', './DEdifici3.jpg', './DEdifici4.JPG',
+      './DEdifici5.JPG', './DEdifici6.JPG', './DEdifici7.JPG', './DEdifici8.JPG',
+      './DEdifici9.JPG', './DEdifici10.JPG', './DEdifici11.JPG', './DEdifici12.JPG',
+      './DEdifici13.jpg', './DEdifici14.jpg'
+    ],
+    Instalacions: [
+      './DInstalacions1.jpg', './DInstalacions2.jpg', './DInstalacions3.jpg', './DInstalacions4.jpg',
+      './DInstalacions5.jpg', './DInstalacions6.jpg', './DInstalacions7.jpg', './DInstalacions8.jpg',
+      './DInstalacions9.jpg', './DInstalacions10.jpg', './DInstalacions11.jpg', './DInstalacions12.jpg',
+      './DInstalacions13.jpg', './DInstalacions14.jpg', './DInstalacions15.jpg', './DInstalacions16.jpg',
+      './DInstalacions17.jpg', './DInstalacions18.jpg', './DInstalacions19.jpg', './DInstalacions20.jpg',
+      './DInstalacions21.jpg'
+    ],
+    Producte: [
+      './DProducte1.png', './DProducte2.png', './DProducte3.png', './DProducte4.png',
+      './DProducte5.png', './DProducte6.jpg', './DProducte7.jpg', './DProducte8.jpg', './DProducte9.jpg'
+    ]
+  },
+  fundiciones: {
+    Edifici: [
+      './FEdifici1.jpg', './FEdifici2.jpg', './FEdifici3.jpg', './FEdifici4.jpg',
+      './FEdifici5.jpg', './FEdifici6.jpg', './FEdifici7.jpg'
+    ],
+    Instalacions: [
+      './FInstalacions1.jpg', './FInstalacions2.jpg', './FInstalacions3.jpg', './FInstalacions4.jpg',
+      './FInstalacions5.jpg', './FInstalacions6.jpg', './FInstalacions7.jpg', './FInstalacions8.jpg',
+      './FInstalacions9.jpg', './FInstalacions10.jpg', './FInstalacions11.jpg', './FInstalacions12.jpg',
+      './FInstalacions13.jpg', './FInstalacions14.jpg', './FInstalacions15.jpg', './FInstalacions16.jpg',
+      './FInstalacions17.jpg', './FInstalacions18.jpg'
+    ],
+    Producte: [
+      './FProducte1.jpg', './FProducte2.jpg', './FProducte3.jpg', './FProducte4.jpg',
+      './FProducte5.jpg', './FProducte6.jpg', './FProducte7.jpg', './FProducte8.jpg', './FProducte9.jpg'
+    ]
+  },
+  america: {
+    Edifici: ['./AEdifici1.jpg', './AEdifici2.jpg'],
+    Instalacions: ['./AInstalacions1.jpg', './AInstalacions2.jpg'],
+    Producte: ['./AProducte1.jpg', './AProducte2.jpg']
+  },
+  pedro: {
+    Edifici: ['./PEdifici1.jpg'],
+    Instalacions: ['./PInstalacions1.jpg'],
+    Producte: ['./PProducte1.jpg']
+  },
+  eastern: {
+    Edifici: ['./EEdifici1.jpg'],
+    Instalacions: ['./EInstalacions1.jpg'],
+    Producte: ['./EProducte1.jpg']
+  },
+  tekor: {
+    Edifici: ['./TEdifici1.jpg'],
+    Instalacions: ['./TInstalacions1.jpg'],
+    Producte: ['./TProducte1.jpg']
+  }
 };
 
 // Helper neteja de grups
@@ -312,7 +331,7 @@ function createMainHubPanels() {
       },
       undefined,
       (err) => {
-        console.warn(`Error en carregar la imatge ${item.img}:`, err);
+        console.warn(`Error carregant logo ${item.img}:`, err);
       }
     );
 
@@ -322,7 +341,7 @@ function createMainHubPanels() {
 
 createMainHubPanels();
 
-// ─── SALA FUNDICIONES I CARRUSEL INFINIT ──────────────────────────────
+// ─── SALA TEMÀTICA I CARRUSEL ─────────────────────────────────────────
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
@@ -334,7 +353,8 @@ scene.add(carouselGroup);
 let carouselItems = [];
 const CAROUSEL_RADIUS = 3.2;
 
-function buildThemeRoom() {
+function buildThemeRoom(companyId) {
+  currentSelectedCompany = companyId;
   clearGroup(roomGroup);
   closeCarousel();
   roomLabels.length = 0; 
@@ -383,8 +403,13 @@ function openCarouselCategory(categoryKey) {
   carouselItems = [];
   carouselGroup.rotation.y = 0; 
 
-  const imageList = fundicionesCategories[categoryKey] || [];
-  if (imageList.length === 0) return;
+  const companyData = companyGalleries[currentSelectedCompany];
+  const imageList = (companyData && companyData[categoryKey]) ? companyData[categoryKey] : [];
+  
+  if (imageList.length === 0) {
+    console.warn(`No hi ha imatges per a ${currentSelectedCompany} -> ${categoryKey}`);
+    return;
+  }
 
   camera.getWorldPosition(_cam);
   carouselGroup.position.set(_cam.x, 0, _cam.z);
@@ -460,6 +485,7 @@ function exitToMainHub() {
   clearGroup(roomGroup);
   roomGroup.visible = false;
   mainHubGroup.visible = true;
+  currentSelectedCompany = null;
   state = 'mainHub';
 }
 
@@ -558,8 +584,9 @@ function handleInput(delta, frame) {
     if (aPressed && !buttonStates.a) {
       if (state === 'mainHub') {
         const idx = getLookedMainPanel();
-        if (idx !== -1 && hubItems[idx].id === 'fundiciones') {
-          buildThemeRoom();
+        if (idx !== -1) {
+          // Obre la sala específica de l'empresa seleccionada
+          buildThemeRoom(hubItems[idx].id);
         }
       } else if (state === 'themeRoom') {
         const ridx = getLookedRoomLabel();
@@ -628,7 +655,7 @@ function animate(time, frame) {
       
       item.prog += (target - item.prog) * 0.12;
 
-      // Escalat i acostament cap a l'usuari
+      // Escalat i acostament cap a l'usuari quan es mira directament la imatge
       item.mesh.scale.setScalar(1 + 0.25 * item.prog);
 
       const moveDir = item.basePos.clone().normalize();
