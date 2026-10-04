@@ -240,7 +240,7 @@ function recenterMainHubAroundUser() {
 const mainPanels = [];
 const MAIN_RADIUS = 2.8;
 const IMAGE_Y = 1.1;
-const IMAGE_WIDTH = 1.8; // Augmentat de 1.2 a 1.8 per fer les imatges més grans
+const IMAGE_WIDTH = 1.8;
 
 function createMainHubPanels() {
   clearGroup(mainHubGroup);
@@ -485,7 +485,6 @@ if (navigator.xr) {
 
 // ─── CONTROLADORS INPUTS MANDOS AR I JOYSTICK ─────────────────────────
 const infoEl = document.getElementById('controllerInfo');
-let joystickTurnCooldown = false;
 
 function handleInput(delta, frame) {
   const session = renderer.xr.getSession(); if (!session) return;
@@ -505,18 +504,20 @@ function handleInput(delta, frame) {
     const aPressed = gp.buttons[4]?.pressed; 
     const bPressed = gp.buttons[5]?.pressed;
 
-    // ROTACIÓ LATERAL AMB EL JOYSTICK DRET (Eix X de l'stick)
+    // ROTACIÓ CONTINUA I FLUÏDA AMB EL JOYSTICK DRET (Smooth Turn)
     const axisX = gp.axes[2] !== undefined ? gp.axes[2] : gp.axes[0];
     if (axisX !== undefined) {
-      const threshold = 0.5;
-      if (Math.abs(axisX) > threshold) {
-        if (!joystickTurnCooldown) {
-          const turnAngle = Math.sign(axisX) * (Math.PI / 6); // Gira 30 graus en la direcció indicada
-          cameraGroup.rotation.y -= turnAngle; // Rotació nomes en l'eix lateral (Y)
-          joystickTurnCooldown = true;
-        }
-      } else {
-        joystickTurnCooldown = false;
+      const deadzone = 0.15; // Zona morta per evitar el desplaçament no desitjat
+      if (Math.abs(axisX) > deadzone) {
+        // Remapegem el valor de l'eix restant la zona morta
+        const sign = Math.sign(axisX);
+        const normalizedInput = (Math.abs(axisX) - deadzone) / (1.0 - deadzone);
+        
+        // Velocitat màxima de rotació en rad/s (aprox. 90 graus per segon al màxim desplaçament)
+        const maxTurnSpeed = 1.5; 
+        
+        // Apliquem la rotació gradual segons el temps passat (delta)
+        cameraGroup.rotation.y -= sign * normalizedInput * maxTurnSpeed * delta;
       }
     }
 
