@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Roquet AR - Dinacil Gallery</title>
+<title>Roquet AR - Fundiciones Gallery</title>
 <style>
   html, body {
     margin: 0; padding: 0;
@@ -38,7 +38,7 @@
 </head>
 <body>
 <div id="overlay">
-  <h2>Dinacil AR — Quest 3</h2>
+  <h2>Fundiciones AR — Quest 3</h2>
   <div id="status">Carregant...</div>
 </div>
 <div id="controllerInfo">Mandos: esperant sessió AR...</div>
@@ -191,56 +191,46 @@ const hubItems = [
   { label: 'Tekor', img: './logos/tekor.png', id: 'tekor' }
 ];
 
-const dinacilCategories = {
+const fundicionesCategories = {
   Edifici: [
-    './DEdifici1.jpg',
-    './DEdifici2.jpg',
-    './DEdifici3.jpg',
-    './DEdifici4.JPG',
-    './DEdifici5.JPG',
-    './DEdifici6.JPG',
-    './DEdifici7.JPG',
-    './DEdifici8.JPG',
-    './DEdifici9.JPG',
-    './DEdifici10.JPG',
-    './DEdifici11.JPG',
-    './DEdifici12.JPG',
-    './DEdifici13.jpg',
-    './DEdifici14.jpg'
+    './FEdifici1.jpg',
+    './FEdifici2.jpg',
+    './FEdifici3.jpg',
+    './FEdifici4.jpg',
+    './FEdifici5.jpg',
+    './FEdifici6.jpg',
+    './FEdifici7.jpg'
   ],
   Instalacions: [
-    './DInstalacions1.jpg',
-    './DInstalacions2.jpg',
-    './DInstalacions3.jpg',
-    './DInstalacions4.jpg',
-    './DInstalacions5.jpg',
-    './DInstalacions6.jpg',
-    './DInstalacions7.jpg',
-    './DInstalacions8.jpg',
-    './DInstalacions9.jpg',
-    './DInstalacions10.jpg',
-    './DInstalacions11.jpg',
-    './DInstalacions12.jpg',
-    './DInstalacions13.jpg',
-    './DInstalacions14.jpg',
-    './DInstalacions15.jpg',
-    './DInstalacions16.jpg',
-    './DInstalacions17.jpg',
-    './DInstalacions18.jpg',
-    './DInstalacions19.jpg',
-    './DInstalacions20.jpg',
-    './DInstalacions21.jpg'
+    './FInstalacions1.jpg',
+    './FInstalacions2.jpg',
+    './FInstalacions3.jpg',
+    './FInstalacions4.jpg',
+    './FInstalacions5.jpg',
+    './FInstalacions6.jpg',
+    './FInstalacions7.jpg',
+    './FInstalacions8.jpg',
+    './FInstalacions9.jpg',
+    './FInstalacions10.jpg',
+    './FInstalacions11.jpg',
+    './FInstalacions12.jpg',
+    './FInstalacions13.jpg',
+    './FInstalacions14.jpg',
+    './FInstalacions15.jpg',
+    './FInstalacions16.jpg',
+    './FInstalacions17.jpg',
+    './FInstalacions18.jpg'
   ],
   Producte: [
-    './DProducte1.png',
-    './DProducte2.png',
-    './DProducte3.png',
-    './DProducte4.png',
-    './DProducte5.png',
-    './DProducte6.jpg',
-    './DProducte7.jpg',
-    './DProducte8.jpg',
-    './DProducte9.jpg'
+    './FProducte1.jpg',
+    './FProducte2.jpg',
+    './FProducte3.jpg',
+    './FProducte4.jpg',
+    './FProducte5.jpg',
+    './FProducte6.jpg',
+    './FProducte7.jpg',
+    './FProducte8.jpg',
+    './FProducte9.jpg'
   ]
 };
 
@@ -332,7 +322,7 @@ function createMainHubPanels() {
 
 createMainHubPanels();
 
-// ─── SALA DINACIL I CARRUSEL INFINIT ──────────────────────────────────
+// ─── SALA FUNDICIONES I CARRUSEL INFINIT ──────────────────────────────
 const roomGroup = new THREE.Group();
 roomGroup.visible = false;
 scene.add(roomGroup);
@@ -393,7 +383,7 @@ function openCarouselCategory(categoryKey) {
   carouselItems = [];
   carouselGroup.rotation.y = 0; 
 
-  const imageList = dinacilCategories[categoryKey] || [];
+  const imageList = fundicionesCategories[categoryKey] || [];
   if (imageList.length === 0) return;
 
   camera.getWorldPosition(_cam);
@@ -568,7 +558,7 @@ function handleInput(delta, frame) {
     if (aPressed && !buttonStates.a) {
       if (state === 'mainHub') {
         const idx = getLookedMainPanel();
-        if (idx !== -1 && hubItems[idx].id === 'dinacil') {
+        if (idx !== -1 && hubItems[idx].id === 'fundiciones') {
           buildThemeRoom();
         }
       } else if (state === 'themeRoom') {
@@ -638,10 +628,9 @@ function animate(time, frame) {
       
       item.prog += (target - item.prog) * 0.12;
 
-      // S'escala un 25% més gran
+      // Escalat i acostament cap a l'usuari
       item.mesh.scale.setScalar(1 + 0.25 * item.prog);
 
-      // S'apropa 0.6 unitats cap al centre (cap a l'usuari)
       const moveDir = item.basePos.clone().normalize();
       const targetPos = item.basePos.clone().sub(moveDir.multiplyScalar(0.6 * item.prog));
       item.mesh.position.copy(targetPos);
