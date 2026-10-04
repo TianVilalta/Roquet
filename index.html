@@ -69,7 +69,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ─── ESTATS DE NAVEGACIÓ ──────────────────────────────────────────────
 let state = 'mainHub';  
-let currentSelectedCompany = null; // Guarda l'empresa activa (dinacil, fundiciones, america...)
+let currentSelectedCompany = null; 
 
 const buttonStates = {};
 const roomLabels = [];
@@ -231,15 +231,32 @@ const companyGalleries = {
       './FProducte5.jpg', './FProducte6.jpg', './FProducte7.jpg', './FProducte8.jpg', './FProducte9.jpg'
     ]
   },
+  pedro: {
+    Edifici: [
+      './PEdifici1.jpg', './PEdifici2.JPG', './PEdifici3.JPG', './PEdifici4.jpg',
+      './PEdifici5.jpg', './PEdifici6.jpg', './PEdifici7.jpg', './PEdifici8.jpg',
+      './PEdifici9.tif', './PEdifici10.JPG', './PEdifici11.jpg', './PEdifici12.jpg',
+      './PEdifici13.jpg', './PEdifici14.jpg', './PEdifici15.jpg', './PEdifici16.jpg'
+    ],
+    Instalacions: [
+      './PInstalacions1.jpg', './PInstalacions2.jpg', './PInstalacions3.jpg', './PInstalacions4.jpg',
+      './PInstalacions5.jpg', './PInstalacions6.jpg', './PInstalacions7.jpg', './PInstalacions8.jpg',
+      './PInstalacions9.jpg', './PInstalacions10.jpg', './PInstalacions11.jpg', './PInstalacions12.jpg',
+      './PInstalacions13.jpg', './PInstalacions14.jpg', './PInstalacions15.jpg', './PInstalacions16.jpg',
+      './PInstalacions17.jpg', './PInstalacions18.jpg', './PInstalacions19.jpg', './PInstalacions20.jpg'
+    ],
+    Producte: [
+      './PProducte1.jpg', './PProducte2.jpg', './PProducte3.jpg', './PProducte4.jpg',
+      './PProducte5.jpg', './PProducte6.jpg', './PProducte7.jpg', './PProducte8.jpg',
+      './PProducte9.jpg', './PProducte10.jpg', './PProducte11.jpg', './PProducte12.jpg',
+      './PProducte13.jpg', './PProducte14.jpg', './PProducte15.jpg', './PProducte16.jpg',
+      './PProducte17.jpg'
+    ]
+  },
   america: {
     Edifici: ['./AEdifici1.jpg', './AEdifici2.jpg'],
     Instalacions: ['./AInstalacions1.jpg', './AInstalacions2.jpg'],
     Producte: ['./AProducte1.jpg', './AProducte2.jpg']
-  },
-  pedro: {
-    Edifici: ['./PEdifici1.jpg'],
-    Instalacions: ['./PInstalacions1.jpg'],
-    Producte: ['./PProducte1.jpg']
   },
   eastern: {
     Edifici: ['./EEdifici1.jpg'],
@@ -585,7 +602,6 @@ function handleInput(delta, frame) {
       if (state === 'mainHub') {
         const idx = getLookedMainPanel();
         if (idx !== -1) {
-          // Obre la sala específica de l'empresa seleccionada
           buildThemeRoom(hubItems[idx].id);
         }
       } else if (state === 'themeRoom') {
@@ -655,7 +671,6 @@ function animate(time, frame) {
       
       item.prog += (target - item.prog) * 0.12;
 
-      // Escalat i acostament cap a l'usuari quan es mira directament la imatge
       item.mesh.scale.setScalar(1 + 0.25 * item.prog);
 
       const moveDir = item.basePos.clone().normalize();
