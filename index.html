@@ -169,6 +169,7 @@ function detachHeadsetVisibilityHandler() {
   headsetVisibilityHandlerAttached = false;
 }
 
+// ─── IL·LUMINACIÓ ─────────────────────────────────────────────────────
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
 scene.add(hemiLight);
 
@@ -506,14 +507,15 @@ function exitToMainHub() {
   state = 'mainHub';
 }
 
-// ─── RAYCASTING I SELECCIÓ ─────────────────────────────────────────────
+// ─── RAYCASTING I SELECCIÓ (UTILITZANT POSICIONS GLOBALS AL MÓN) ────────
 function getLookedMainPanel() {
   camera.getWorldDirection(_fwd);
   camera.getWorldPosition(_cam);
   let best = -1, bestDot = 0.72;
   for (let i = 0; i < mainPanels.length; i++) {
     if (!mainPanels[i].mesh.visible) continue;
-    _to.copy(mainPanels[i].mesh.position).sub(_cam).normalize();
+    mainPanels[i].mesh.getWorldPosition(_itemWorldPos);
+    _to.copy(_itemWorldPos).sub(_cam).normalize();
     const d = _fwd.dot(_to);
     if (d > bestDot) { bestDot = d; best = i; }
   }
@@ -525,7 +527,8 @@ function getLookedRoomLabel() {
   camera.getWorldPosition(_cam);
   let best = -1, bestDot = 0.7;
   for (let i = 0; i < roomLabels.length; i++) {
-    _to.copy(roomLabels[i].mesh.position).sub(_cam).normalize();
+    roomLabels[i].mesh.getWorldPosition(_itemWorldPos);
+    _to.copy(_itemWorldPos).sub(_cam).normalize();
     const d = _fwd.dot(_to);
     if (d > bestDot) { bestDot = d; best = i; }
   }
@@ -659,7 +662,8 @@ function animate(time, frame) {
       const r = roomLabels[i]; 
       const target = (i === looked) ? 1 : 0; 
       r.prog += (target - r.prog) * 0.12;
-      r.mesh.scale.setScalar(1 + 0.25 * r.prog);
+      r.scale = 1 + 0.25 * r.prog;
+      r.mesh.scale.setScalar(r.scale);
       r.mesh.material.opacity = 0.5 + 0.5 * r.prog;
       r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
     }
