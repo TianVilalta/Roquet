@@ -274,6 +274,100 @@ const companyGalleries = {
   }
 };
 
+// ─── OPTIMITZACIÓ DE CARREGA D'IMATGES I TEXTURES ─────────────────────────
+const textureCache = new Map();
+let placeholderTexture = null;
+
+function createPlaceholderTexture() {
+  if (placeholderTexture) return placeholderTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  
+  // Subtle dark glassy gradient for placeholders instead of blank white
+  const grad = ctx.createLinearGradient(0, 0, 128, 128);
+  grad.addColorStop(0, '#1a2332');
+  grad.addColorStop(1, '#0c1017');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+
+  ctx.strokeStyle = 'rgba(244, 162, 97, 0.4)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(4, 4, 120, 120);
+
+  placeholderTexture = new THREE.CanvasTexture(canvas);
+  placeholderTexture.generateMipmaps = false;
+  placeholderTexture.minFilter = THREE.LinearFilter;
+  return placeholderTexture;
+}
+
+function loadOptimizedTexture(url, onLoaded) {
+  if (textureCache.has(url)) {
+    const cached = textureCache.get(url);
+    if (onLoaded) onLoaded(cached.texture, cached.width, cached.height);
+    return cached.texture;
+  }
+
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = url;
+
+  const texture = new THREE.Texture(img);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = false; 
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+
+  img.onload = () => {
+    texture.needsUpdate = true;
+    const w = img.naturalWidth || 512;
+    const h = img.naturalHeight || 512;
+    textureCache.set(url, { texture, width: w, height: h });
+    if (onLoaded) onLoaded(texture, w, h);
+  };
+
+  img.onerror = (err) => {
+    console.warn(`Error carregant imatge ${url}:`, err);
+  };
+
+  return texture;
+}
+
+// Pre-carrega en segon pla (background preloading) per a zero retards
+function preloadGalleryImagesInBackground() {
+  const allUrls = [];
+  hubItems.forEach(item => allUrls.push(item.img));
+  
+  Object.values(companyGalleries).forEach(categories => {
+    Object.values(categories).forEach(list => {
+      list.forEach(url => allUrls.push(url));
+    });
+  });
+
+  let index = 0;
+  function processQueue() {
+    const start = performance.now();
+    while (index < allUrls.length && performance.now() - start < 8) {
+      const url = allUrls[index++];
+      if (!textureCache.has(url)) {
+        loadOptimizedTexture(url);
+      }
+    }
+    if (index < allUrls.length) {
+      if (window.requestIdleCallback) {
+        requestIdleCallback(processQueue);
+      } else {
+        setTimeout(processQueue, 50);
+      }
+    }
+  }
+
+  setTimeout(processQueue, 500);
+}
+
+preloadGalleryImagesInBackground();
+
 // Helper neteja de grups
 function clearGroup(g) {
   while (g.children.length) {
@@ -283,7 +377,7 @@ function clearGroup(g) {
     if (c.material) {
       const mats = Array.isArray(c.material) ? c.material : [c.material];
       mats.forEach(m => {
-        if (m.map) m.map.dispose();
+        // We keep textures in cache, don't dispose shared maps
         m.dispose();
       });
     }
@@ -315,7 +409,7 @@ const IMAGE_Y = 1.2;
 function createMainHubPanels() {
   clearGroup(mainHubGroup);
   mainPanels.length = 0;
-  const loader = new THREE.TextureLoader();
+  const pTex = createPlaceholderTexture();
 
   for (let i = 0; i < hubItems.length; i++) {
     const angle = (i / hubItems.length) * Math.PI * 2;
@@ -324,37 +418,29 @@ function createMainHubPanels() {
     const item = hubItems[i];
 
     const mat = new THREE.MeshBasicMaterial({ 
+      map: pTex,
       transparent: true, 
+      opacity: 0.85,
       side: THREE.DoubleSide
     });
 
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.1), mat);
-    mesh.visible = false; 
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), mat);
+    mesh.visible = true; 
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     mainHubGroup.add(mesh);
 
-    loader.load(
-      item.img, 
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        mesh.material.map = tex;
-        mesh.material.needsUpdate = true;
+    loadOptimizedTexture(item.img, (tex, iw, ih) => {
+      mesh.material.map = tex;
+      mesh.material.needsUpdate = true;
 
-        const iw = tex.image?.naturalWidth || 512;
-        const ih = tex.image?.naturalHeight || 512;
-        const w = 0.9;
-        const h = w * (ih / iw);
+      const w = 0.9;
+      const h = w * (ih / iw);
 
-        mesh.geometry.dispose();
-        mesh.geometry = new THREE.PlaneGeometry(w, h);
-        mesh.visible = true;
-      },
-      undefined,
-      (err) => {
-        console.warn(`Error carregant logo ${item.img}:`, err);
-      }
-    );
+      mesh.geometry.dispose();
+      mesh.geometry = new THREE.PlaneGeometry(w, h);
+      mesh.material.opacity = 1.0;
+    });
 
     mainPanels.push({ mesh, item, index: i, prog: 0 });
   }
@@ -435,7 +521,10 @@ function createProfessionalLabelTexture(text) {
   // Centrat offsetat per compensar l'accent lateral
   ctx.fillText(text, (x + w / 2) + 10, y + h / 2);
 
-  return new THREE.CanvasTexture(lc);
+  const canvasTex = new THREE.CanvasTexture(lc);
+  canvasTex.generateMipmaps = false;
+  canvasTex.minFilter = THREE.LinearFilter;
+  return canvasTex;
 }
 
 function buildThemeRoom(companyId) {
@@ -507,8 +596,8 @@ function openCarouselCategory(categoryKey) {
   camera.getWorldPosition(_cam);
   carouselGroup.position.set(_cam.x, 0, _cam.z);
 
-  const loader = new THREE.TextureLoader();
   const count = imageList.length;
+  const pTex = createPlaceholderTexture();
 
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2;
@@ -519,42 +608,38 @@ function openCarouselCategory(categoryKey) {
     );
 
     const mat = new THREE.MeshBasicMaterial({ 
+      map: pTex,
       side: THREE.DoubleSide, 
       transparent: true,
-      opacity: 0.95
+      opacity: 0.6
     });
 
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.9), mat);
     mesh.position.copy(basePos);
     mesh.lookAt(0, 1.2, 0);
     carouselGroup.add(mesh);
 
-    loader.load(
-      imageList[i],
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        mesh.material.map = tex;
-        mesh.material.needsUpdate = true;
-
-        const iw = tex.image?.naturalWidth || 512;
-        const ih = tex.image?.naturalHeight || 512;
-        const w = 1.2;
-        const h = w * (ih / iw);
-
-        mesh.geometry.dispose();
-        mesh.geometry = new THREE.PlaneGeometry(w, h);
-      },
-      undefined,
-      (err) => {
-        console.warn(`Error carregant imatge carrusel: ${imageList[i]}`, err);
-      }
-    );
-
-    carouselItems.push({
+    const itemObj = {
       mesh,
       basePos: basePos.clone(),
-      prog: 0
+      prog: 0,
+      loaded: false
+    };
+
+    loadOptimizedTexture(imageList[i], (tex, iw, ih) => {
+      mesh.material.map = tex;
+      mesh.material.needsUpdate = true;
+
+      const w = 1.2;
+      const h = w * (ih / iw);
+
+      mesh.geometry.dispose();
+      mesh.geometry = new THREE.PlaneGeometry(w, h);
+      mesh.material.opacity = 0.95;
+      itemObj.loaded = true;
     });
+
+    carouselItems.push(itemObj);
   }
 
   roomGroup.visible = false;
