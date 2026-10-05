@@ -9,7 +9,7 @@
     margin: 0; padding: 0;
     width: 100%; height: 100%;
     overflow: hidden;
-    background: transparent;
+    background: #000;
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color: white;
   }
@@ -20,7 +20,7 @@
     padding: 20px;
     pointer-events: none;
     color: #fff;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    z-index: 10;
   }
   #status { margin-top: 10px; font-size: 14px; color: #ccc; }
   #controllerInfo {
@@ -28,13 +28,13 @@
     top: 10px; left: 10px;
     font-size: 12px;
     line-height: 1.6;
-    background: rgba(10, 15, 25, 0.75);
-    backdrop-filter: blur(8px);
-    padding: 10px 16px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0,0,0,0.75);
+    padding: 8px 14px;
+    border-radius: 8px;
     pointer-events: none;
     white-space: pre;
+    z-index: 10;
+    border: 1px solid rgba(255,255,255,0.1);
   }
   canvas { display: block; }
 </style>
@@ -54,16 +54,6 @@
   }
 }
 </script>
-<script>
-  window.addEventListener('error', e => {
-    const s = document.getElementById('status');
-    if (s) { s.textContent = 'Error: ' + (e.message || e); s.style.color = '#f66'; }
-  });
-  window.addEventListener('unhandledrejection', e => {
-    const s = document.getElementById('status');
-    if (s) { s.textContent = 'Error: ' + (e.reason?.message ?? e.reason); s.style.color = '#f66'; }
-  });
-</script>
 
 <script type="module">
 import * as THREE from 'three';
@@ -82,6 +72,9 @@ const _cam = new THREE.Vector3();
 const _to  = new THREE.Vector3();
 const _camPos2D = new THREE.Vector3();
 const _itemWorldPos = new THREE.Vector3();
+
+// Cache de textures optimitzat
+const textureCache = new Map();
 
 // ─── RENDERITZADOR I ESCENA ───────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ 
@@ -143,8 +136,8 @@ function markHeadsetOffOrPaused() {
 }
 
 function onHeadsetVisibilityChange(event) {
-  const state = event?.session?.visibilityState || renderer.xr.getSession()?.visibilityState;
-  if (state === 'hidden' || state === 'visible' || state === 'visible-blurred') {
+  const st = event?.session?.visibilityState || renderer.xr.getSession()?.visibilityState;
+  if (st === 'hidden' || st === 'visible' || st === 'visible-blurred') {
     markHeadsetOffOrPaused();
   }
 }
@@ -172,7 +165,6 @@ function detachHeadsetVisibilityHandler() {
   headsetVisibilityHandlerAttached = false;
 }
 
-// ─── IL·LUMINACIÓ ─────────────────────────────────────────────────────
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
 scene.add(hemiLight);
 
@@ -274,101 +266,55 @@ const companyGalleries = {
   }
 };
 
-// ─── OPTIMITZACIÓ DE CARREGA D'IMATGES I TEXTURES ─────────────────────────
-const textureCache = new Map();
-let placeholderTexture = null;
-
-function createPlaceholderTexture() {
-  if (placeholderTexture) return placeholderTexture;
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  
-  // Subtle dark glassy gradient for placeholders instead of blank white
-  const grad = ctx.createLinearGradient(0, 0, 128, 128);
-  grad.addColorStop(0, '#1a2332');
-  grad.addColorStop(1, '#0c1017');
-  ctx.fillStyle = grad;
+// ─── CARREGADOR D'IMATGES OPTIMITZAT ──────────────────────────────────
+function createDarkPlaceholderTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0a0a0d';
   ctx.fillRect(0, 0, 128, 128);
-
-  ctx.strokeStyle = 'rgba(244, 162, 97, 0.4)';
+  ctx.strokeStyle = 'rgba(244, 162, 97, 0.3)';
   ctx.lineWidth = 4;
   ctx.strokeRect(4, 4, 120, 120);
-
-  placeholderTexture = new THREE.CanvasTexture(canvas);
-  placeholderTexture.generateMipmaps = false;
-  placeholderTexture.minFilter = THREE.LinearFilter;
-  return placeholderTexture;
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
-function loadOptimizedTexture(url, onLoaded) {
+const defaultPlaceholderTex = createDarkPlaceholderTexture();
+
+function loadFastTexture(url) {
   if (textureCache.has(url)) {
-    const cached = textureCache.get(url);
-    if (onLoaded) onLoaded(cached.texture, cached.width, cached.height);
-    return cached.texture;
+    return Promise.resolve(textureCache.get(url));
   }
 
-  const img = new Image();
-  img.decoding = 'async';
-  img.src = url;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.decoding = 'async';
+    
+    img.onload = () => {
+      const tex = new THREE.Texture(img);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.generateMipmaps = false;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.needsUpdate = true;
+      
+      const aspect = (img.naturalWidth && img.naturalHeight) ? (img.naturalHeight / img.naturalWidth) : 0.75;
+      const result = { texture: tex, aspect };
+      textureCache.set(url, result);
+      resolve(result);
+    };
 
-  const texture = new THREE.Texture(img);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.generateMipmaps = false; 
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
+    img.onerror = () => {
+      resolve({ texture: defaultPlaceholderTex, aspect: 0.75 });
+    };
 
-  img.onload = () => {
-    texture.needsUpdate = true;
-    const w = img.naturalWidth || 512;
-    const h = img.naturalHeight || 512;
-    textureCache.set(url, { texture, width: w, height: h });
-    if (onLoaded) onLoaded(texture, w, h);
-  };
-
-  img.onerror = (err) => {
-    console.warn(`Error carregant imatge ${url}:`, err);
-  };
-
-  return texture;
-}
-
-// Pre-carrega en segon pla (background preloading) per a zero retards
-function preloadGalleryImagesInBackground() {
-  const allUrls = [];
-  hubItems.forEach(item => allUrls.push(item.img));
-  
-  Object.values(companyGalleries).forEach(categories => {
-    Object.values(categories).forEach(list => {
-      list.forEach(url => allUrls.push(url));
-    });
+    img.src = url;
   });
-
-  let index = 0;
-  function processQueue() {
-    const start = performance.now();
-    while (index < allUrls.length && performance.now() - start < 8) {
-      const url = allUrls[index++];
-      if (!textureCache.has(url)) {
-        loadOptimizedTexture(url);
-      }
-    }
-    if (index < allUrls.length) {
-      if (window.requestIdleCallback) {
-        requestIdleCallback(processQueue);
-      } else {
-        setTimeout(processQueue, 50);
-      }
-    }
-  }
-
-  setTimeout(processQueue, 500);
 }
 
-preloadGalleryImagesInBackground();
-
-// Helper neteja de grups
 function clearGroup(g) {
   while (g.children.length) {
     const c = g.children[0];
@@ -377,11 +323,79 @@ function clearGroup(g) {
     if (c.material) {
       const mats = Array.isArray(c.material) ? c.material : [c.material];
       mats.forEach(m => {
-        // We keep textures in cache, don't dispose shared maps
+        if (m.map && m.map !== defaultPlaceholderTex) m.map.dispose();
         m.dispose();
       });
     }
   }
+}
+
+// ─── CANVAS PER A RECTANGLES NEGRES AMB DIFUMINAT ──────────────────────
+function createDarkGlowTexture(text) {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 256;
+  const ctx = c.getContext('2d');
+
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  const margin = 24;
+  const x = margin;
+  const y = margin;
+  const w = c.width - margin * 2;
+  const h = c.height - margin * 2;
+  const radius = 20;
+
+  // Difuminat / Aura exterior
+  ctx.save();
+  ctx.shadowColor = 'rgba(244, 162, 97, 0.5)';
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = '#0a0a0d';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.fill();
+  ctx.restore();
+
+  // Fons Negre Pur amb gradient subtil intern
+  const grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, '#121216');
+  grad.addColorStop(0.5, '#070709');
+  grad.addColorStop(1, '#020203');
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.fill();
+
+  // Vora neó prima amb estil difuminat
+  ctx.strokeStyle = 'rgba(244, 162, 97, 0.8)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.stroke();
+
+  // Linia superior
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y + 2);
+  ctx.lineTo(x + w - radius, y + 2);
+  ctx.stroke();
+
+  // Text
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 36px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+  ctx.shadowBlur = 8;
+  ctx.fillText(text, c.width / 2, c.height / 2);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
 }
 
 // ─── MAIN HUB ──────────────────────────────────────────────────────────
@@ -409,7 +423,6 @@ const IMAGE_Y = 1.2;
 function createMainHubPanels() {
   clearGroup(mainHubGroup);
   mainPanels.length = 0;
-  const pTex = createPlaceholderTexture();
 
   for (let i = 0; i < hubItems.length; i++) {
     const angle = (i / hubItems.length) * Math.PI * 2;
@@ -418,28 +431,23 @@ function createMainHubPanels() {
     const item = hubItems[i];
 
     const mat = new THREE.MeshBasicMaterial({ 
-      map: pTex,
+      map: defaultPlaceholderTex,
       transparent: true, 
-      opacity: 0.85,
       side: THREE.DoubleSide
     });
 
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), mat);
-    mesh.visible = true; 
     mesh.position.set(x, IMAGE_Y, z);
     mesh.lookAt(0, IMAGE_Y, 0);
     mainHubGroup.add(mesh);
 
-    loadOptimizedTexture(item.img, (tex, iw, ih) => {
-      mesh.material.map = tex;
+    loadFastTexture(item.img).then(({ texture, aspect }) => {
+      mesh.material.map = texture;
       mesh.material.needsUpdate = true;
-
       const w = 0.9;
-      const h = w * (ih / iw);
-
+      const h = w * aspect;
       mesh.geometry.dispose();
       mesh.geometry = new THREE.PlaneGeometry(w, h);
-      mesh.material.opacity = 1.0;
     });
 
     mainPanels.push({ mesh, item, index: i, prog: 0 });
@@ -460,80 +468,12 @@ scene.add(carouselGroup);
 let carouselItems = [];
 const CAROUSEL_RADIUS = 3.2;
 
-// Funció per generar targetes de menú ultra-professionals
-function createProfessionalLabelTexture(text) {
-  const lc = document.createElement('canvas'); 
-  lc.width = 512; 
-  lc.height = 160;
-  const ctx = lc.getContext('2d');
-  
-  ctx.clearRect(0, 0, lc.width, lc.height);
-
-  const x = 12, y = 12, w = 488, h = 136, r = 24;
-
-  // 1. Fons Glassmorphic (Degradat obscur de fons)
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, lc.height);
-  bgGrad.addColorStop(0, 'rgba(20, 26, 38, 0.92)');
-  bgGrad.addColorStop(1, 'rgba(8, 12, 18, 0.96)');
-
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.fillStyle = bgGrad;
-  ctx.fill();
-
-  // 2. Brillantor interior / il·luminació superior
-  const topGlow = ctx.createLinearGradient(0, y, 0, y + 45);
-  topGlow.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
-  topGlow.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
-  ctx.beginPath();
-  ctx.roundRect(x + 2, y + 2, w - 4, 45, [r - 2, r - 2, 0, 0]);
-  ctx.fillStyle = topGlow;
-  ctx.fill();
-
-  // 3. Marc exterior fi amb accent daurat/taronja de la marca
-  const borderGrad = ctx.createLinearGradient(0, 0, lc.width, lc.height);
-  borderGrad.addColorStop(0, '#f4a261');
-  borderGrad.addColorStop(0.5, 'rgba(244, 162, 97, 0.3)');
-  borderGrad.addColorStop(1, '#e76f51');
-
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = borderGrad;
-  ctx.stroke();
-
-  // 4. Accent lateral cromàtic primari
-  ctx.beginPath();
-  ctx.roundRect(x + 14, y + 24, 6, h - 48, 3);
-  ctx.fillStyle = '#f4a261';
-  ctx.fill();
-
-  // 5. Ombra de text i Tipografia refinada
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetY = 3;
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '600 36px "Segoe UI", Roboto, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  
-  // Centrat offsetat per compensar l'accent lateral
-  ctx.fillText(text, (x + w / 2) + 10, y + h / 2);
-
-  const canvasTex = new THREE.CanvasTexture(lc);
-  canvasTex.generateMipmaps = false;
-  canvasTex.minFilter = THREE.LinearFilter;
-  return canvasTex;
-}
-
 function buildThemeRoom(companyId) {
   currentSelectedCompany = companyId;
   clearGroup(roomGroup);
   closeCarousel();
   roomLabels.length = 0; 
 
-  // Col·locar el grup de la sala a la posició de la càmera
   camera.getWorldPosition(_cam);
   camera.getWorldDirection(_fwd);
   _fwd.y = 0;
@@ -541,38 +481,42 @@ function buildThemeRoom(companyId) {
 
   roomGroup.position.set(_cam.x, 0, _cam.z);
 
-  // Orienta la sala de manera que la direcció -Z del grup coincideixi amb la mirada actual
   if (_fwd.lengthSq() > 0) {
-    const angle = Math.atan2(_fwd.x, _fwd.z);
-    roomGroup.rotation.y = angle - Math.PI;
+    const lookAngle = Math.atan2(_fwd.x, _fwd.z);
+    roomGroup.rotation.y = lookAngle - Math.PI;
+  } else {
+    roomGroup.rotation.y = 0;
   }
 
-  // Definim les 3 categories: 'Producte' primer per situar-lo directament al davant
-  const labels = ['Producte', 'Edifici', 'Instalacions'];
+  // Categories: Producte al centre (angle 0)
+  const categoryConfig = [
+    { key: 'Producte', angle: 0 },
+    { key: 'Edifici', angle: -Math.PI / 3 },
+    { key: 'Instalacions', angle: Math.PI / 3 }
+  ];
+
   const RL_RADIUS = 2.5;
   const RL_Y = 1.2;
 
-  // L'angle 0 queda a (0, 1.2, -RL_RADIUS), és a dir, exactament DAVANT la mirada de l'usuari.
-  // Es distribueixen de forma simètrica: Producte (0°), Edifici (+120°), Instalacions (-120°)
-  const angleOffsets = [0, (Math.PI * 2) / 3, -(Math.PI * 2) / 3];
+  for (let i = 0; i < categoryConfig.length; i++) {
+    const config = categoryConfig[i];
+    const lx = Math.sin(config.angle) * RL_RADIUS;
+    const lz = -Math.cos(config.angle) * RL_RADIUS;
 
-  for (let i = 0; i < labels.length; i++) {
-    const angle = angleOffsets[i];
-    const lx = Math.sin(angle) * RL_RADIUS;
-    const lz = -Math.cos(angle) * RL_RADIUS;
+    const ltex = createDarkGlowTexture(config.key);
+    const lmat = new THREE.MeshBasicMaterial({ 
+      map: ltex, 
+      transparent: true, 
+      side: THREE.DoubleSide,
+      opacity: 0.85
+    });
 
-    const ltex = createProfessionalLabelTexture(labels[i]);
-    const lmesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.35, 0.42), 
-      new THREE.MeshBasicMaterial({ map: ltex, transparent: true, side: THREE.DoubleSide })
-    );
-    
+    const lmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), lmat);
     lmesh.position.set(lx, RL_Y, lz);
     lmesh.lookAt(0, RL_Y, 0);
-    lmesh.material.opacity = 0.85;
     
     roomGroup.add(lmesh);
-    roomLabels.push({ mesh: lmesh, index: i, categoryKey: labels[i], prog: 0 });
+    roomLabels.push({ mesh: lmesh, index: i, categoryKey: config.key, prog: 0 });
   }
 
   mainHubGroup.visible = false;
@@ -589,7 +533,6 @@ function openCarouselCategory(categoryKey) {
   const imageList = (companyData && companyData[categoryKey]) ? companyData[categoryKey] : [];
   
   if (imageList.length === 0) {
-    console.warn(`No hi ha imatges per a ${currentSelectedCompany} -> ${categoryKey}`);
     return;
   }
 
@@ -597,7 +540,6 @@ function openCarouselCategory(categoryKey) {
   carouselGroup.position.set(_cam.x, 0, _cam.z);
 
   const count = imageList.length;
-  const pTex = createPlaceholderTexture();
 
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2;
@@ -608,10 +550,10 @@ function openCarouselCategory(categoryKey) {
     );
 
     const mat = new THREE.MeshBasicMaterial({ 
-      map: pTex,
+      map: defaultPlaceholderTex,
       side: THREE.DoubleSide, 
       transparent: true,
-      opacity: 0.6
+      opacity: 0.95
     });
 
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.9), mat);
@@ -619,27 +561,20 @@ function openCarouselCategory(categoryKey) {
     mesh.lookAt(0, 1.2, 0);
     carouselGroup.add(mesh);
 
-    const itemObj = {
-      mesh,
-      basePos: basePos.clone(),
-      prog: 0,
-      loaded: false
-    };
-
-    loadOptimizedTexture(imageList[i], (tex, iw, ih) => {
-      mesh.material.map = tex;
+    loadFastTexture(imageList[i]).then(({ texture, aspect }) => {
+      mesh.material.map = texture;
       mesh.material.needsUpdate = true;
-
       const w = 1.2;
-      const h = w * (ih / iw);
-
+      const h = w * aspect;
       mesh.geometry.dispose();
       mesh.geometry = new THREE.PlaneGeometry(w, h);
-      mesh.material.opacity = 0.95;
-      itemObj.loaded = true;
     });
 
-    carouselItems.push(itemObj);
+    carouselItems.push({
+      mesh,
+      basePos: basePos.clone(),
+      prog: 0
+    });
   }
 
   roomGroup.visible = false;
@@ -657,7 +592,6 @@ function closeCarousel() {
   }
 }
 
-// ─── NAVEGACIÓ I SORTIDA ───────────────────────────────────────────────
 function exitToMainHub() {
   closeCarousel();
   clearGroup(roomGroup);
@@ -667,11 +601,12 @@ function exitToMainHub() {
   state = 'mainHub';
 }
 
-// ─── RAYCASTING I SELECCIÓ (UTILITZANT POSICIONS GLOBALS AL MÓN) ────────
+// ─── RAYCASTING I SELECCIÓ PRECISOS (WORLDPOS) ─────────────────────────
 function getLookedMainPanel() {
   camera.getWorldDirection(_fwd);
   camera.getWorldPosition(_cam);
   let best = -1, bestDot = 0.72;
+  
   for (let i = 0; i < mainPanels.length; i++) {
     if (!mainPanels[i].mesh.visible) continue;
     mainPanels[i].mesh.getWorldPosition(_itemWorldPos);
@@ -686,6 +621,7 @@ function getLookedRoomLabel() {
   camera.getWorldDirection(_fwd);
   camera.getWorldPosition(_cam);
   let best = -1, bestDot = 0.7;
+  
   for (let i = 0; i < roomLabels.length; i++) {
     roomLabels[i].mesh.getWorldPosition(_itemWorldPos);
     _to.copy(_itemWorldPos).sub(_cam).normalize();
@@ -699,6 +635,7 @@ function getLookedCarouselItem() {
   camera.getWorldDirection(_fwd);
   camera.getWorldPosition(_cam);
   let best = -1, bestDot = 0.8;
+  
   for (let i = 0; i < carouselItems.length; i++) {
     carouselItems[i].mesh.getWorldPosition(_itemWorldPos);
     _to.copy(_itemWorldPos).sub(_cam).normalize();
@@ -708,7 +645,7 @@ function getLookedCarouselItem() {
   return best;
 }
 
-// ─── BOTÓ WEBXR AR ─────────────────────────────────────────────────────
+// ─── WEBXR BUTTON ──────────────────────────────────────────────────────
 const statusEl = document.getElementById('status');
 statusEl.textContent = 'Comprovant WebXR AR...';
 
@@ -744,7 +681,6 @@ function handleInput(delta, frame) {
     const aPressed = gp.buttons[4]?.pressed; 
     const bPressed = gp.buttons[5]?.pressed;
 
-    // MOVIMENT DEL JOYSTICK DRET
     const axisX = gp.axes[2] !== undefined ? gp.axes[2] : gp.axes[0];
     if (axisX !== undefined) {
       const deadzone = 0.15;
@@ -822,9 +758,7 @@ function animate(time, frame) {
       const r = roomLabels[i]; 
       const target = (i === looked) ? 1 : 0; 
       r.prog += (target - r.prog) * 0.12;
-      
-      const currentScale = 1 + 0.22 * r.prog;
-      r.mesh.scale.setScalar(currentScale);
+      r.mesh.scale.setScalar(1 + 0.25 * r.prog);
       r.mesh.material.opacity = 0.75 + 0.25 * r.prog;
       r.mesh.lookAt(_camPos2D.x, r.mesh.position.y, _camPos2D.z);
     }
